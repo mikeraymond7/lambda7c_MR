@@ -1,0 +1,55 @@
+      | Define(x, a) -> 
+        if isNone (this.get_entry(x.value)) then
+          match a with 
+            | TypedLambda(param, ty, axpr) -> // NOT DONE
+              // x:LBox<expr> list
+              let mutable ptypes = []
+              this.add_entry(x.value, ty, Some(axpr.value))
+              this.push_frame(x.value, x.line, x.column)
+              for i in param do
+                match i.value with
+                  | Var(s) -> 
+                    this.add_entry(s, LLunknown, None)
+                    ptypes <- LLunknown::ptypes
+                  | TypedVar(ty,s) -> 
+                    this.add_entry(s, ty, None)
+                    ptypes <- ty::ptypes
+                  | _ -> 
+                    printfn "Line %d: Expected 'Var' or 'TypedVar' in lambda parameters but found '%A'" (i.line) (i.value)
+  
+              let mutable ptypes_rev = []
+              for i in ptypes do
+                ptypes_rev <- i::ptypes_rev
+              let atype = this.infer_type(axpr.value,axpr.line)
+              let ret = LLfun(ptypes_rev, atype)
+              if (ty = atype || ty =  LLunknown) && atype <> LLuntypable then
+                this.add_entry(x.value, ret, Some(axpr.value))
+                this.pop_frame() |> ignore
+                ret
+              else 
+                printfn "Line %d: 'define' type of variable '%s' and associated lambda are not the same. '%s':'%A' but 'lambda':'%A'" (x.line) (x.value) (x.value) ret atype
+                this.pop_frame() |> ignore
+                LLuntypable
+            | Var(s) -> 
+              let atype = this.infer_type(a,x.line)
+              if atype <> LLuntypable then
+                this.add_entry(x.value, atype, Some(a))
+                LLvar(x.value)
+              else
+                printfn "Line %d: 'define' of '%s' has type LLuntypable" line (x.value)
+                LLuntypable
+            | TypedVar(ty, s) ->
+              let atype = this.infer_type(a,x.line)
+              if atype = ty || atype = LLunknown then
+                this.add_entry(x.value, ty, Some(a))
+                LLvar(x.value)
+              else
+                printfn "Line %d: 'define' of '%s' has type LLuntypable" line (x.value)
+                LLuntypable
+            | a ->
+              printfn "Line %d: 'define' expected variable but found '%A'" line a
+              LLuntypable
+        else
+          printfn "Line %d: '%s' has already been defined" line (x.value)
+          LLuntypable
+

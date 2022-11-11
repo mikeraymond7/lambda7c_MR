@@ -1,0 +1,1 @@
+fsharpc -a llvmir.fs

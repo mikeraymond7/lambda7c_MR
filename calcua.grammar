@@ -1,0 +1,79 @@
+# F# version, non-ambiguous, does not rely on precedence/assoc declarations
+
+!
+!type expr = Val of int | Var of string | Float of float | Plus of expr*expr | Times of expr*expr | Minus of expr*expr | Divide of expr*expr | Negative of expr | Letexp of string*expr*expr | Equals of (expr*expr) | Uint of uint64;;
+!
+!let conv64 (x:string) :uint64 = System.UInt64.Parse(x.Substring(0,x.Length-2))
+
+# Vec is defined the namespace as an alias for ResizeArray
+valuetype Vec<expr>
+
+# E5 binds tightest
+nonterminal E5 expr
+nonterminal E4 expr
+nonterminal E3 expr
+nonterminal E2 expr
+nonterminal E1 expr
+
+nonterminal ES
+terminals + - * / ( ) == = ;
+terminals let in
+valueterminal Val ~ int ~ Num ~ int
+valueterminal Var ~ string ~ Alphanum ~ (fun x -> x)
+valueterminal Float ~ float ~ Float ~ float
+lexattribute custom U64 [0-9]+UL
+valueterminal Ulong ~ uint64 ~ U64 ~ conv64
+
+lexattribute line_comment #
+
+topsym ES
+resync ;
+# resync defines an error-recovery point, currently not used by F# parser
+
+E5 --> Val:m { Val(m) }
+E5 --> Var:s { Var(s) }
+E5 --> Float:f { Float(f) }
+E5 --> Ulong:u { Uint(u) }
+E5 --> - E5:e { Negative(e) }
+E5 --> ( E1:e ) { e }
+
+# for * and /
+E4 --> E5:x { x }
+E4 --> E4:e1 * E5:e2 { Times(e1,e2) }
+E4 ==> E4:e1 / E5:e2 {
+  if e2=Val(0) then
+     let (ln,cl) = parser.position(2)
+     printfn "Warning:obvious divsion by 0, line %d column %d" ln cl
+  Divide(e1,e2)
+  } <==
+  
+# for + and -
+E3 --> E4:e { e }
+E3 --> E3:e1 - E4:e2 { Minus(e1,e2) }
+E3 --> E3:e1 + E4:e2 { Plus(e1,e2) }
+
+# right-recursive for right-associative operator, but would need another level
+
+# for ==, made right-recursive just to illustrate how it's done
+E2 --> E3:e {e}
+E2 --> E3:e1 == E2:e2 { Equals(e1,e2) }
+
+# for let x = ...
+E1 --> E2:e { e }
+E1 --> let Var:x = E2:e in E1:b { Letexp(x,e,b) }
+
+ES --> E1<;+>:v ;? { v }
+# The <;+> operation automatically generates new grammar rules to
+# recognize a ;-separated sequence of E1's and places them in a
+# vector (ResizeArray) as semantic value
+
+EOF
+
+Everything after EOF is ignored and can be used for more comments
+
+alterntive rules for ES:
+#ES --> E:e ; { let v = Vec<expr>() in (v.Add(e); v) }
+#ES --> ES:es  E:e ;  { (es.Add(e); es) }
+
+# this will always require a ; at the end:
+#ES --> (E ;)+:v { v }
