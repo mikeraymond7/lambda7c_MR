@@ -14,7 +14,7 @@
 - Code Generation --> mikompiler.fs
 
 #### To compile all files:
-1. ./recompile\_dll.sh
+1. ./recompile\_dll.sh  
 OR 
 2. ./compile\_X where x is the name of the file to recompile
 
