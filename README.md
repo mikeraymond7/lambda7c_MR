@@ -14,12 +14,9 @@
 - Code Generation --> mikompiler.fs
 
 #### To compile all files:
-1. ```bash
-./recompile\_dll.sh  
-```
+1. ```bash ./recompile\_dll.sh```
 OR 
-2. ```bash
-./compile\_X``` 
+2. ```bash ./compile\_X``` 
  where x is the name of the file to recompile
 ## Currently Unimplemented:
 - Vectors
