@@ -11,7 +11,7 @@
 - Parser --> recless.fs
 - Grammar --> michaeLL.fs
 - Typechecker --> mikeCheck.fs
-- Code Generation --> mikompiler.fs
+- Code Generation / Compiler --> llvmir.fs
 
 #### To compile all files:
 1. ```bash ./recompile\_dll.sh```  --> also generates .exe to run most recent addition to scope
