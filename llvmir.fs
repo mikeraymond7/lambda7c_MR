@@ -188,6 +188,9 @@ let rec iToString(i:Instruction) =
 // TODO
 let translate_type(ty:lltype) = // returns LLVMtype
   match ty with
+    | LLint -> Basic("i32")
+    | LLfloat -> Basic("double")
+    | LLstring -> Pointer(Basic("i8")) // dis wrong bruv
     | _ -> Void_t
 
 
@@ -267,11 +270,13 @@ type LLVMprogram =
   }
 
   member this.to_string() = 
-    let mutable code_gen = ""
+    let mutable code_gen = this.preamble 
     for fn in this.functions do
       for b in fn.body do
+        code_gen <- code_gen + sprintf "\n%s:"  (b.label)
         for i in b.body do
           code_gen <- code_gen + "\n" + iToString(i)
+    code_gen <- code_gen + "\n" + this.postamble
     code_gen
   
   member this.add_preamble(s) = 
@@ -350,6 +355,7 @@ type LLVMCompiler =
         for ex in a do
           printfn "Compilation Successful"
           res <- this.compile_expr(ex.value, fn) 
+          this.program.functions.Add(fn)
         res
       | _ -> 
         printfn "I don't know if I can help you"
