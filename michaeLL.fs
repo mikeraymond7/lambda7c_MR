@@ -73,13 +73,13 @@ let semactVar(rhs:Vec<Stackitem<expr>>) =
       | Var(x), TypeExpr(ty) -> TypedVar(ty,x)
       | _ -> Error
 
-// Expr --> if Binop Axpr Axpr
+// Expr --> if ( GetBin ) Axpr Axpr
 let semactIf(rhs:Vec<Stackitem<expr>>) = 
   match (rhs.[2].value,rhs.[4].value, rhs.[5].value) with
     | (Binop(s,a,b), axpr1,axpr2) -> Ifelse(Binop(s,a,b), axpr1, axpr2)
     | _ -> Error
 
-// Expr --> while ( Binop ) ( BeginSeq )
+// Expr --> while ( GetBin ) ( BeginSeq )
 let semactWhl(rhs:Vec<Stackitem<expr>>) = 
   match (rhs.[2].value, rhs.[5].value) with
     | (Binop(s,a,b),Sequence(c)) -> Whileloop(Binop(s,a,b), Sequence(c))

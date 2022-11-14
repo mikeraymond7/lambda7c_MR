@@ -300,26 +300,34 @@ let mutable global_frame = // root frame
     entries= HashMap<string,table_entry>();
     parent_scope = None;
   }
-let symbol_table =
+(*let symbol_table =
   {
     SymbolTable.current_frame=global_frame;
     global_index = 0;
     frame_hash = HashMap<(int*int),table_frame>();
-  }
+  }*)
 
 //parse(true); // TRACE = true
 //let res = parse(true); // TRACE = true
-let res = parse(false); // TRACE = false
+(*let res = parse(false); // TRACE = false
 match res with
   | Some(a) ->
     let t = symbol_table.infer_type(a,0);
     printfn "Type: %A" t
-  | None -> printfn "CANNOT TYPECHECK... UNRECOVERABLE"
+  | None -> printfn "CANNOT TYPECHECK... UNRECOVERABLE"*)
 
+let typecheck_old(trace:bool, symbol_table:SymbolTable) = 
+  let res = parse(trace)
+  match res with
+    | Some(a) ->
+      let t = symbol_table.infer_type(a,0)
+      printfn "Type: %A" t
+      Some(t)
+    | None -> 
+      printfn "CANNOT TYPECHECK... UNRECOVERABLE"
+      None
 
+let typecheck(symbol_table:SymbolTable, ex:expr) = 
+  symbol_table.infer_type(ex,0)
 
-
-
-
-
-
+  

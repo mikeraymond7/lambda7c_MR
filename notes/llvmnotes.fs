@@ -1,11 +1,3 @@
-module lambda7c
-open System;
-open System.Collections.Generic;
-open Option;
-open MichaeLL;
-open MikeCheck;
-
-
 (* Abstract representation of Simplified LLVM IR:  (includes assignment)
 
 LLVM looks like a monster but actually a lot of the stuff you see in a file
@@ -29,6 +21,17 @@ There is (currently) only one function in this file: 'destination', which
 retrives the destination register of an instruction as an Option<string>.
 Not all instructions have destinations.  For example, for %r1 = add i32 ...
 the destination is Some("r1").
+
+///////////////// PROGRAMMING ASSIGNMENT: ///////////////////
+
+Write functions to write a LLVMprogram in string form that can be saved to
+a file.  Of course this means you must write a function for each type.
+For example, for 
+
+  Instruction.Binaryop("r2","add",Basic("i8"),Register("r1"),Iconst(1))
+
+You should return the string
+  "%r2 = add i8 %r1, 1\n"
 *)
 
 type Vec<'T> = ResizeArray<'T>
@@ -82,6 +85,128 @@ type Instruction =
   // other llvm instructions not covered by above must be encoded as:
   | Verbatim of string //generic "other" instruction, default case, comments
 
+(*
+The instruction set represented by the F# 'Instruction' type is a simplified
+subset of LLVM instructions, encoding only the most commonly used forms that
+you will encounter while writing LLVM program by hand, or when generating LLVM
+code.  All other LLVM instructions must be encoded with the union-variant
+Instruction.Verbatim.
+
+For many of these instructions, information that's most common or obvious
+are omitted.  For example, in a conditional branch instruction such as
+
+  br i1 %r1, label %label1, label %label2
+
+The type of of %r1 is almost always i1, and is thus omitted from the abstract
+representation. Such an instruction is encoded as
+
+  Instruction.Bri1(LLVMexpr.Register("r1"), "label1", "label2")
+
+In case the type is not 'i1', then the instruction would have to be encoded
+as Verbatim("...").
+
+Similar, for a load operation
+
+  %r2 = load i32, i32* %r1  ;no , align4 at the end
+
+The type 'i32*' is omitted since it is derivable from i32.  I don't think
+it's even possible to use another type.  The "align 4" is optional. The
+encoding of this instruction is
+
+Instruction.Load("r2",LLVMtype.Basic_t("i32"),LLVMexpr.Register("r1"),None)
+
+Replace None with Some("align 4") if desired.
+
+For instructions that commonly returns a value, the first string is the
+destination register:
+
+  %r3 = add i32 %r1, 1
+
+is encoded as
+
+  Instruction.Binaryop("r3","add",Basic("i32"),Register("r1"),Iconst(1))
+
+The Call (function call) instruction has an optional destination, in case
+there is no return value for the function being called.  The Call instruction
+has another optional component: a list of types that's required for calling
+certain types of functions like printf.  The list is empty if no type is
+specified.
+
+  %r2 = call i32 @func1(i8* %r1, double 1.0)
+
+is encoded as
+
+  Call(Some("r2"),Basic("i32"),[],"func1",[(Pointer(Basic("i8")),Register("r1")),(Basic("double"),Fconst(1.0))])
+
+The empty list [] represents that no additional type information is needed.
+On the other hand, calls to printf requires a a type specifier for printf:
+
+  call i32 (i8*,...) @printf(i8* %r2, i32 %r1)
+
+is encoded as
+
+  Call(None,Basic("i32"),[Pointer(Basic("i8")),Ellipsis],"printf",[(Pointer(Basic("i8")),Register("r2")), (Basic("i32"),Register("r1"))])
+
+The above instruction is probably preceeded by something like:
+
+  %r2 = getelementptr inbounds [9 x i8], [9 x i8]* @str1, i64 0, i64 0
+
+The getelementptr instruction has grown from a relatively easy to understand
+operation to an absolute monster.  Only two commonly used forms are included
+(others have to be made Verbatim). This above assignment to %r2 is encoded as
+
+  Arrayindex("r2",9,Basic("i8"),Global("str1"),Iconst(0))
+
+This is used to find the address of an array element, so the above is the
+address of str1[0] in an array of 9 bytes (char[9]): The last expression
+is the array index.  Note that getelementptr always computes an ADDRESS:
+it does not extract the value, which must be done with 'load'.
+
+The other form of getelementptr encoded as an Instruction is
+
+  %r2=getelementptr inbounds %bigstruct, %bigstruct* %r1 i32 0, i32 1
+
+This is encoded as
+
+  Structfield("r2",Userstruct("bigstruct"),Register("r1"),Iconst(1))
+
+For example, given struct bigstruct { int x; char y; } b;  &b.y can be
+retrieved with this instruction.  Nested struct access (a.b.c) will require
+multiple Structfield instructions.
+
+//// Examples of all other instructions (abstract form : concrete form)
+
+Instruction.Ret(LLVMtype.Basic("i32"),LLVMexpr.Register("r1"))  : ret i32 %r1
+Ret_noval   :
+    ret
+Br_uc("loopstart")  :
+    br label %loopstart
+Bri1(Register("r2"),"label1","label2") :
+    br i1 %r2, label %label1, label %label2
+Store(Basic("i8"),Iconst(1),Register("r1"),Some("align 1")) :
+    store i8 1, i8* %r1, align 1 ; align is not really needed
+Alloca("r1",Basic("i32"),Some("align 4")) : %r1 = alloca i32, align 4
+    ;alloca allocates on the stack.  Call function malloc for heap allocation
+Unaryop("r2","fneg",None,Basic("float"),Register("r1")) : fneg float %r1
+    ; fneg is the only unary operation, option is for "fast-math flags"
+    ; ... but "fast-math" is not for Hofstra students :-0
+Cast("r2","bitcast",Pointer(Basic("i8")),Register("r1"),Pointer(Basic("i32"))):
+    %r2 = bitcast i8* %r1 to i32*
+Icmp("r2","sle",Basic("i32"),Register("r1"),Iconst(1)) :
+    %r2 = icmp sle i32 %r1, 1   ;sle is signed <=
+Fcmp("r2","oeq",Basic("float"),Fconst(4.0),Register("r1")) :
+    %r2 = fcmp oeq float 4.0, %r1   ;oeq is ordered equality
+SelectTrue("r3",Basic("i32"),Register("r1"),Register("r2")) :
+    %r3 = select i1 true, i32 %r1, i32 %r2 ;why would you select false
+Phi2("r2",Basic("i32"),Iconst(1),"block1",Register("r1"),"block2") :
+    %r2 = phi i32 [1, %block1], [%r1, "block2"]
+Phi("3",Basic("i8"),[(Iconst(1),"bb1"),(Iconst(2),"bb2"),(Iconst(3),"bb3")] :
+    %3 = phi i8 [1, %bb1], [2, %bb2], [3, %bb3] ;better to stick to Phi2
+Call(Some("r1"),Basic("i64"),"factorial",[(Basic("i8"),Iconst(8))])
+    %r1 = call i64 @factorial(i8 6)
+Verbatim("; comments start with ; so you can add ; to end of line")
+    
+*)
 
 let rec exToString(e:LLVMexpr) = 
   match e with
@@ -185,13 +310,6 @@ let rec iToString(i:Instruction) =
     | Verbatim(s) -> s
     //| _ -> ""
 
-// TODO
-let translate_type(ty:lltype) = // returns LLVMtype
-  match ty with
-    | _ -> Void_t
-
-
-
 
 // extracts the destination register from an instruction, returns string option
 let destination = function
@@ -239,45 +357,13 @@ type LLVMFunction =
   }
   // block is closed iff it branches to another bb or is the very last block and has "ret"
 
-  // add instruction to the last basic block
-  member this.add_inst(i:Instruction) = 
-    // add instruction to last basic block
-    let len = this.body.Count
-    let lastBB = this.body.[len-1]
-    lastBB.body.Add(i)
-
-  member this.new_bb(lab:string) = 
-    let newBB:BasicBlock = {
-      label = lab
-      body = Vec()
-    }
-    this.body.Add(newBB)
-
-   member this.currentBBlabel() = 
-     let len = this.body.Count
-     let curBB = this.body.[len-1]
-     curBB.label
-
 type LLVMprogram =
   {
-     mutable preamble : string;   // arbitrary stuff like target triple
+     preamble : string;   // arbitrary stuff like target triple
      global_declarations : Vec<LLVMdeclaration>;
      functions: Vec<LLVMFunction>;
-     mutable postamble : string;  // stuff you don't want to know about
+     postamble : string;  // stuff you don't want to know about
   }
-
-  member this.to_string() = 
-    let mutable code_gen = ""
-    for fn in this.functions do
-      for b in fn.body do
-        for i in b.body do
-          code_gen <- code_gen + "\n" + iToString(i)
-    code_gen
-  
-  member this.add_preamble(s) = 
-    this.preamble <- this.preamble + "\n" + s
-
-
 
 type LLVMCompiler =
   {
@@ -288,135 +374,4 @@ type LLVMCompiler =
     // .. other stuff omitted
   }//struct LLVMCompiler
 
-  member this.newid(s) = 
-    let x = sprintf "%s_%d" s (this.gindex)
-    this.gindex <- this.gindex + 1
-    x
 
-  member this.compile_expr(ex:expr, func:LLVMFunction) = // return LLVMexpr
-    match ex with 
-      | Integer(x) -> Iconst(x)
-      | Floatpt(f) -> Fconst(f)
-      | Strlit(s) -> Sconst(s)
-//      | Var(s) ->
-//      | TypedVar(ty,s) ->
-//      | Nil ->
-//      | Binop(s,a,b) -> 
-//      | Uniop(s,a) ->
-      | Ifelse(bl,t,f) -> 
-          let cdest = this.compile_expr(bl, func)
-          let ccast = this.newid("r")
-          func.add_inst(Cast(ccast,"trunc",Basic("i32"),cdest,Basic("i1")));
-          let label1 = this.newid("iftrue")
-          let label0 = this.newid("iffalse")
-          let endif = this.newid("endif")
-          let brinst = Bri1(Register(ccast),label1,label0)
-          let predlabel = func.currentBBlabel()
-          func.add_inst(brinst) // close block
-          func.new_bb(label1) //|> ignore // open BB1
-          let dest1 = this.compile_expr(t,func)
-          let realabel1 = func.currentBBlabel()
-          func.add_inst(Br_uc(endif)) // close BB1
-          func.new_bb(label0) //|> ignore // open BB0
-          let dest0 = this.compile_expr(f,func)
-          let realabel0 = func.currentBBlabel()
-          func.add_inst(Br_uc(endif)) // close BB0
-          func.new_bb(endif) //|> ignore // open newBB
-          let desttype = translate_type(this.symbol_table.infer_type(t,0))
- 
-          if desttype <> Void_t then 
-            let fdest = this.newid("r")
-            let phiinst = Phi2(fdest,desttype,dest1,realabel1,dest0,realabel0)
-            func.add_inst(phiinst)
-            Register(fdest)
-          else 
-            Novalue 
-        // Ifelse        
-//      | Whileloop(bl,seq) ->
-//      | Define(sbox,a) ->
-//      | TypedDefine(tsbox,a) ->
-//      | Lambda -> Iconst(1)
-//      | TypedLambda -> Iconst(1)
-//      | Let(sbox,a,bbox) -> Iconst(1)
-//      | TypedLet(tsbox,a,bbox) -> Iconst(1)
-//      | Setq(sbox,a) -> 
-//      | Sequence(abox::b) -> 
-      | _ -> Iconst(0)
-
-  member this.compile_seq(seq:expr, fn:LLVMFunction) = 
-    match seq with
-      | Sequence(a) ->
-        let mutable res = Novalue
-        for ex in a do
-          printfn "Compilation Successful"
-          res <- this.compile_expr(ex.value, fn) 
-        res
-      | _ -> 
-        printfn "I don't know if I can help you"
-        Novalue
-
-  member this.compile_program(mainseq:expr) = 
-    match mainseq with 
-      | Sequence(a) ->
-        let ptype = this.symbol_table.infer_type(mainseq,0)
-        if ptype = LLuntypable then
-          sprintf "Program failed to type check. No output produced\n"
-        else 
-          this.program.add_preamble("target triple = \"x86_64-pc-linux-gnu\"") 
-          this.program.preamble <- this.program.preamble + "target triple = \"x86_64-pc-linux-gnu\"\n"
-          let mutable mainfunc:LLVMFunction = {
-            name = "main"
-            formal_args = Vec()
-            return_type = Basic("i32")
-            body = Vec()
-            attributes = Vec()
-          }
-          mainfunc.new_bb("beginmain") //|> ignore
-    
-          let mainres = this.compile_seq(mainseq, mainfunc)
-          let ret:Instruction = Ret(Basic("i32"),Iconst(0))
-          mainfunc.add_inst(ret)
-          
-          this.program.to_string()
-      | _ -> sprintf "Expected to Compile Sequence but found %A" mainseq
-          
-
-// http://cs.hofstra.edu/~cscccl/csc124/fall22/test0.ll 
-// shows output of Liang's compiler
-
-// ifelse and display need lbox
-
-
-let compile() = 
-  let res = parse(true)
-  match res with 
-    | Some(a) -> 
-      let complr:LLVMCompiler = {
-        symbol_table = {
-          SymbolTable.current_frame = {
-            table_frame.name = "global"
-            entries = HashMap<string,table_entry>()
-            parent_scope = None
-          }
-          global_index = 0
-          frame_hash = HashMap<(int*int),table_frame>()
-        } 
-        program = {
-          preamble = ""
-          global_declarations = Vec()
-          functions = Vec()
-          postamble = ""
-        }
-        gindex = 0
-        lindex = 0
-      }
-      let t = typecheck(complr.symbol_table,a)
-      match t with
-        | LLuntypable -> printfn "UNTYPABLE EXPRESSIONS CANNOT COMPILE"
-        | _ -> 
-          let gen_code = complr.compile_program(a)
-          printfn "Code:\n%A" gen_code
-       
-    | None -> printfn "CANNOT COMPILE ---- FAILED TO PARSE"
-
-compile()
