@@ -102,7 +102,7 @@ let rec tyToString(t:LLVMtype) =
     | Array_t(i,ty) -> "[" + i.ToString() + " x " + tyToString(ty)
     | Userstruct(s) -> s
     | Ellipsis -> "..."
-    | Void_t -> ""
+    | Void_t -> "void"
 
 let rec iToString(i:Instruction) =
   match i with
@@ -323,7 +323,6 @@ type LLVMCompiler =
       | Integer(x) -> Iconst(x)
       | Floatpt(f) -> Fconst(f)
       | Strlit(s) -> Sconst(s)
-//      | Var(s) ->
 //      | TypedVar(ty,s) ->
 //      | Nil ->
 //      | Uniop(s,a) ->
@@ -551,6 +550,20 @@ type LLVMCompiler =
       // Setq
       | Uniop("display", a) ->
           match a with 
+            | Var(x) -> 
+              let entry = this.symbol_table.get_entry(x).Value
+              let desttype = entry.typeof
+              let printtype = translate_type(desttype)
+              let mutable printfun = "lambda7c_print"
+              if printtype = Basic("i32") then
+                printfun <- printfun + "int"
+              else if printtype = Basic("double") then
+                printfun <- printfun + "float"
+              else if printtype = Basic("double") then 
+                printfun <- printfun + "str"
+              let cdest = this.compile_expr(Var(x),func)
+              func.add_inst(Call(None, Void_t,[], printfun, [(printtype, cdest)]))
+              Novalue
             | Integer(i) ->
               func.add_inst(Call(None, Void_t,[], "lambda7c_printint", [(Basic("i32"), Iconst(i))]))
               Novalue
@@ -642,4 +655,4 @@ let compile(trace) =
        *)
     | None -> printfn "CANNOT COMPILE ---- FAILED TO PARSE"
 
-compile(false)
+compile(true)

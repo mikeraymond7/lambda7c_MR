@@ -185,7 +185,6 @@ type SymbolTable = // wrapping structure for symbol table frames
         let entry = this.get_entry(s)
         match entry with
           | Some(w) -> 
-            printfn "You fucked up: %A" w
             printfn "Line %d, Column %d: '%s' has already been defined" (x.line) (x.column) (s)
             LLuntypable
           | None ->
