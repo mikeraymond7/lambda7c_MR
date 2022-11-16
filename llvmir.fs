@@ -106,13 +106,13 @@ let rec tyToString(t:LLVMtype) =
 
 let rec iToString(i:Instruction) =
   match i with
-    | Ret(ty, expr) -> "ret " + exToString(expr) + " " + tyToString(ty)
+    | Ret(ty, expr) -> "ret " + tyToString(ty) + " " + exToString(expr)
     | Ret_noval -> "ret"
     | Br_uc(s) -> "br label %" + s
-    | Bri1(ex,l1,l2) -> "br il " + exToString(ex) + ", label %" + l1 + ", label %" + l2
+    | Bri1(ex,l1,l2) -> "br i1 " + exToString(ex) + ", label %" + l1 + ", label %" + l2
     | Load(r,ty,ex,opt) ->
       let typ = tyToString(ty)
-      let ret = "%" + r + " = load" + typ + ", " + typ + "* " + exToString(ex)
+      let ret = "%" + r + " = load " + typ + ", " + typ + "* " + exToString(ex)
       match opt with
         | Some(a) -> ret + ", " + a
         | None -> ret
@@ -128,7 +128,7 @@ let rec iToString(i:Instruction) =
         | Some(a) -> ret + ", " + a.ToString()
         | None -> ret
     | Binaryop(s,binop,ty,ex1,ex2) -> 
-      "%" + s + " = " + binop + " " + exToString(ex1) + " " + exToString(ex2)
+      "%" + s + " = " + binop + " " + tyToString(ty) + " " + exToString(ex1) + ", " + exToString(ex2)
     | Unaryop(s,uniop,opt,ty,ex) -> 
       let ret = "%" + s + " = " + uniop 
       match opt with
@@ -272,27 +272,30 @@ type LLVMprogram =
   member this.to_string() = 
     let mutable code_gen = this.preamble 
     for fn in this.functions do
-<<<<<<< HEAD
-=======
+
       let mutable def = sprintf "\ndefine %s @%s(" (tyToString(fn.return_type)) (fn.name) 
       let num_params = fn.formal_args.Count
+
       if num_params > 0 then
+
         for i = 0 to  (num_params - 2) do
           let (ty, p) = fn.formal_args.[i]
           def <- def + sprintf "%s %%%s," (tyToString(ty)) p
+
         let (ty, last) = fn.formal_args.[num_params-1]
         def <- def + sprintf "%s %%%s" (tyToString(ty)) last
       def <- def + ") {"
       code_gen <- code_gen + def
->>>>>>> Testing Binop and Ifelse cases
+
       for b in fn.body do
+
         code_gen <- code_gen + sprintf "\n%s:"  (b.label)
+
         for i in b.body do
+
           code_gen <- code_gen + "\n" + iToString(i)
-<<<<<<< HEAD
-=======
+
       code_gen <- code_gen + "\n}"
->>>>>>> Testing Binop and Ifelse cases
     code_gen <- code_gen + "\n" + this.postamble
     code_gen
   
@@ -323,10 +326,6 @@ type LLVMCompiler =
 //      | Var(s) ->
 //      | TypedVar(ty,s) ->
 //      | Nil ->
-<<<<<<< HEAD
-//      | Binop(s,a,b) -> 
-//      | Uniop(s,a) ->
-=======
 //      | Uniop(s,a) ->
       | Binop("+",a,b) -> 
         let adest = this.compile_expr(a, func)
@@ -336,6 +335,7 @@ type LLVMCompiler =
         if rtype = Basic("double") then
           func.add_inst(Binaryop(r1, "fadd", rtype, adest, bdest))
         else
+          printfn "RTYPE: %A" rtype
           func.add_inst(Binaryop(r1, "add", rtype, adest, bdest))
         Register(r1)
       // Binop *
@@ -482,15 +482,15 @@ type LLVMCompiler =
           func.add_inst(Binaryop(r1, "mul", rtype, adest, bdest))
         Register(r1)
       // Binop *
->>>>>>> Testing Binop and Ifelse cases
       | Ifelse(bl,t,f) -> 
           let cdest = this.compile_expr(bl, func)
-          let ccast = this.newid("r")
-          func.add_inst(Cast(ccast,"trunc",Basic("i32"),cdest,Basic("i1")));
+          //let ccast = this.newid("r")
+          //func.add_inst(Cast(ccast,"trunc",Basic("i32"),cdest,Basic("i1"))); // cdest is bool
           let label1 = this.newid("iftrue")
           let label0 = this.newid("iffalse")
           let endif = this.newid("endif")
-          let brinst = Bri1(Register(ccast),label1,label0)
+          let brinst = Bri1(cdest,label1,label0)
+          //let brinst = Bri1(Register(ccast),label1,label0)
           let predlabel = func.currentBBlabel()
           func.add_inst(brinst) // close block
           func.new_bb(label1) //|> ignore // open BB1
@@ -511,19 +511,50 @@ type LLVMCompiler =
             Register(fdest)
           else 
             Novalue 
-<<<<<<< HEAD
-        // Ifelse        
-=======
       // Ifelse        
->>>>>>> Testing Binop and Ifelse cases
 //      | Whileloop(bl,seq) ->
-//      | Define(sbox,a) ->
+      | Define(sbox,a) ->
+          let x = sbox.value
+          let cdest = this.compile_expr(a, func)
+          let entry = this.symbol_table.get_entry(x).Value // will error out in typechecking if None
+          let desttype = translate_type(entry.typeof)
+          let new_x = sprintf "%s_%d" x (entry.gindex) // will crash if user declares "r"
+          //let new_x = this.newid((sprintf "%s_%d" x (entry.gindex)))
+          func.add_inst(Alloca(new_x,desttype,None))
+          func.add_inst(Store(desttype,cdest,Register(new_x),None))
+          (*let r = this.newid("r")
+          func.add_inst(Load(r,desttype,Register(new_x)))
+          Register(r)*)
+          Register(new_x)
+      | Var(s) ->  
+          let entry = this.symbol_table.get_entry(s).Value
+          let new_x = sprintf "%s_%d" s (entry.gindex)
+          let desttype = translate_type(entry.typeof)
+          let r = this.newid("r")
+          func.add_inst(Load(r, desttype, Register(new_x), None))
+          //Register(new_x)
+          Register(r)
+      // Var
 //      | TypedDefine(tsbox,a) ->
 //      | Lambda -> Iconst(1)
 //      | TypedLambda -> Iconst(1)
 //      | Let(sbox,a,bbox) -> Iconst(1)
 //      | TypedLet(tsbox,a,bbox) -> Iconst(1)
-//      | Setq(sbox,a) -> 
+      | Setq(sbox,a) -> 
+          let x = sbox.value
+          let entry = this.symbol_table.get_entry(x).Value
+          let new_x = sprintf "%s_%d" x (entry.gindex)
+          let cdest = this.compile_expr(a, func)
+          let desttype = translate_type(entry.typeof)
+          func.add_inst(Store(desttype, cdest, Register(new_x), None))
+          Register(new_x)
+      // Setq
+      | Uniop("display", a) ->
+          match a with 
+            | Integer(i) ->
+              func.add_inst(Call(None, Void_t,[], "lambda7c_printint", [(Basic("i32"), Iconst(i))]))
+              Novalue
+            | _ -> Novalue
 //      | Sequence(abox::b) -> 
       | _ -> Iconst(0)
 
@@ -532,9 +563,9 @@ type LLVMCompiler =
       | Sequence(a) ->
         let mutable res = Novalue
         for ex in a do
-          printfn "Compilation Successful"
+          //printfn "Compilation Successful"
           res <- this.compile_expr(ex.value, fn) 
-          this.program.functions.Add(fn)
+        this.program.functions.Add(fn)
         res
       | _ -> 
         printfn "I don't know if I can help you"
@@ -547,8 +578,11 @@ type LLVMCompiler =
         if ptype = LLuntypable then
           sprintf "Program failed to type check. No output produced\n"
         else 
+          this.gindex <- this.symbol_table.global_index + 1 // NOT SURE but will fix issue
           this.program.add_preamble("target triple = \"x86_64-pc-linux-gnu\"") 
-          this.program.preamble <- this.program.preamble + "target triple = \"x86_64-pc-linux-gnu\"\n"
+          this.program.add_preamble("declare void @lambda7c_printint(i32)")
+          this.program.add_preamble("declare void @lambda7c_printfloat(double)")
+          this.program.add_preamble("declare void @lambda7c_printstr(i8*)")
           let mutable mainfunc:LLVMFunction = {
             name = "main"
             formal_args = Vec()
@@ -572,13 +606,8 @@ type LLVMCompiler =
 // ifelse and display need lbox
 
 
-<<<<<<< HEAD
-let compile() = 
-  let res = parse(true)
-=======
 let compile(trace) = 
   let res = parse(trace)
->>>>>>> Testing Binop and Ifelse cases
   match res with 
     | Some(a) -> 
       let complr:LLVMCompiler = {
@@ -600,22 +629,17 @@ let compile(trace) =
         gindex = 0
         lindex = 0
       }
-      let t = typecheck(complr.symbol_table,a)
+      let gen_code = complr.compile_program(a)
+      printfn "%s" gen_code
+
+      (*let t = typecheck(complr.symbol_table,a,trace)
       match t with
         | LLuntypable -> printfn "UNTYPABLE EXPRESSIONS CANNOT COMPILE"
         | _ -> 
           let gen_code = complr.compile_program(a)
-<<<<<<< HEAD
-          printfn "Code:\n%A" gen_code
-       
-    | None -> printfn "CANNOT COMPILE ---- FAILED TO PARSE"
-
-compile()
-=======
           //printfn "Code:\n%s" gen_code
           printfn "%s" gen_code
-       
+       *)
     | None -> printfn "CANNOT COMPILE ---- FAILED TO PARSE"
 
 compile(false)
->>>>>>> Testing Binop and Ifelse cases

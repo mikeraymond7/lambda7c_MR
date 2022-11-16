@@ -180,6 +180,24 @@ type SymbolTable = // wrapping structure for symbol table frames
             printfn "Line %d: Variable '%s' has not been declared" line x
             LLuntypable
           | Some(x) -> (x.typeof)
+      | Define(x,a) ->
+        let s = x.value
+        let entry = this.get_entry(s)
+        match entry with
+          | Some(w) -> 
+            printfn "You fucked up: %A" w
+            printfn "Line %d, Column %d: '%s' has already been defined" (x.line) (x.column) (s)
+            LLuntypable
+          | None ->
+            // cannot be Lambda based on grammar
+            let atype = this.infer_type(a,x.line)
+            if atype = LLunknown || atype = LLuntypable then
+              printfn "Line %d, Column %d: Type of '%s' is '%A'" (x.line) (x.column) (s) atype
+              LLuntypable
+            else 
+              this.add_entry(s, atype, Some(a))
+              LLvar(s)
+            
       | TypedDefine(x,a) ->
         match x.value with 
           | (tyv,s) ->
@@ -327,7 +345,10 @@ let typecheck_old(trace:bool, symbol_table:SymbolTable) =
       printfn "CANNOT TYPECHECK... UNRECOVERABLE"
       None
 
-let typecheck(symbol_table:SymbolTable, ex:expr) = 
-  symbol_table.infer_type(ex,0)
+let typecheck(symbol_table:SymbolTable, ex:expr, trace:bool) = 
+  let res = symbol_table.infer_type(ex,0)
+  if trace then
+    printfn "Type: %A" res
+  res
 
   
