@@ -272,10 +272,27 @@ type LLVMprogram =
   member this.to_string() = 
     let mutable code_gen = this.preamble 
     for fn in this.functions do
+<<<<<<< HEAD
+=======
+      let mutable def = sprintf "\ndefine %s @%s(" (tyToString(fn.return_type)) (fn.name) 
+      let num_params = fn.formal_args.Count
+      if num_params > 0 then
+        for i = 0 to  (num_params - 2) do
+          let (ty, p) = fn.formal_args.[i]
+          def <- def + sprintf "%s %%%s," (tyToString(ty)) p
+        let (ty, last) = fn.formal_args.[num_params-1]
+        def <- def + sprintf "%s %%%s" (tyToString(ty)) last
+      def <- def + ") {"
+      code_gen <- code_gen + def
+>>>>>>> Testing Binop and Ifelse cases
       for b in fn.body do
         code_gen <- code_gen + sprintf "\n%s:"  (b.label)
         for i in b.body do
           code_gen <- code_gen + "\n" + iToString(i)
+<<<<<<< HEAD
+=======
+      code_gen <- code_gen + "\n}"
+>>>>>>> Testing Binop and Ifelse cases
     code_gen <- code_gen + "\n" + this.postamble
     code_gen
   
@@ -306,8 +323,166 @@ type LLVMCompiler =
 //      | Var(s) ->
 //      | TypedVar(ty,s) ->
 //      | Nil ->
+<<<<<<< HEAD
 //      | Binop(s,a,b) -> 
 //      | Uniop(s,a) ->
+=======
+//      | Uniop(s,a) ->
+      | Binop("+",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Binaryop(r1, "fadd", rtype, adest, bdest))
+        else
+          func.add_inst(Binaryop(r1, "add", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop("-",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Binaryop(r1, "fsub", rtype, adest, bdest))
+        else
+          func.add_inst(Binaryop(r1, "sub", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop("*",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Binaryop(r1, "fmul", rtype, adest, bdest))
+        else
+          func.add_inst(Binaryop(r1, "mul", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop("DIV",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Binaryop(r1, "fdiv", rtype, adest, bdest))
+        else
+          func.add_inst(Binaryop(r1, "div", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop(">",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Fcmp(r1, "ogt", rtype, adest, bdest))
+        else
+          func.add_inst(Icmp(r1, "sgt", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop("<",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Fcmp(r1, "olt", rtype, adest, bdest))
+        else
+          func.add_inst(Icmp(r1, "slt", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop("=",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Fcmp(r1, "oeq", rtype, adest, bdest))
+        else
+          func.add_inst(Icmp(r1, "eq", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop(">=",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Fcmp(r1, "sge", rtype, adest, bdest))
+        else
+          func.add_inst(Icmp(r1, "oge", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop("%",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Fcmp(r1, "srem", rtype, adest, bdest))
+        else
+          func.add_inst(Icmp(r1, "srem", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop("neq",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Fcmp(r1, "une", rtype, adest, bdest))
+        else
+          func.add_inst(Icmp(r1, "ne", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop("eq",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Fcmp(r1, "oeq", rtype, adest, bdest))
+        else
+          func.add_inst(Icmp(r1, "eq", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop("and",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Fcmp(r1, "and", rtype, adest, bdest))
+        else
+          func.add_inst(Icmp(r1, "and", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop("or",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Binaryop(r1, "fmul", rtype, adest, bdest))
+        else
+          func.add_inst(Binaryop(r1, "mul", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+      | Binop("^",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Binaryop(r1, "fmul", rtype, adest, bdest))
+        else
+          func.add_inst(Binaryop(r1, "mul", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
+>>>>>>> Testing Binop and Ifelse cases
       | Ifelse(bl,t,f) -> 
           let cdest = this.compile_expr(bl, func)
           let ccast = this.newid("r")
@@ -336,7 +511,11 @@ type LLVMCompiler =
             Register(fdest)
           else 
             Novalue 
+<<<<<<< HEAD
         // Ifelse        
+=======
+      // Ifelse        
+>>>>>>> Testing Binop and Ifelse cases
 //      | Whileloop(bl,seq) ->
 //      | Define(sbox,a) ->
 //      | TypedDefine(tsbox,a) ->
@@ -393,8 +572,13 @@ type LLVMCompiler =
 // ifelse and display need lbox
 
 
+<<<<<<< HEAD
 let compile() = 
   let res = parse(true)
+=======
+let compile(trace) = 
+  let res = parse(trace)
+>>>>>>> Testing Binop and Ifelse cases
   match res with 
     | Some(a) -> 
       let complr:LLVMCompiler = {
@@ -421,8 +605,17 @@ let compile() =
         | LLuntypable -> printfn "UNTYPABLE EXPRESSIONS CANNOT COMPILE"
         | _ -> 
           let gen_code = complr.compile_program(a)
+<<<<<<< HEAD
           printfn "Code:\n%A" gen_code
        
     | None -> printfn "CANNOT COMPILE ---- FAILED TO PARSE"
 
 compile()
+=======
+          //printfn "Code:\n%s" gen_code
+          printfn "%s" gen_code
+       
+    | None -> printfn "CANNOT COMPILE ---- FAILED TO PARSE"
+
+compile(false)
+>>>>>>> Testing Binop and Ifelse cases
