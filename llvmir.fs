@@ -482,57 +482,63 @@ type LLVMCompiler =
         Register(r1)
       // Binop *
       | Ifelse(bl,t,f) -> 
-          let cdest = this.compile_expr(bl, func)
-          //let ccast = this.newid("r")
-          //func.add_inst(Cast(ccast,"trunc",Basic("i32"),cdest,Basic("i1"))); // cdest is bool
-          let label1 = this.newid("iftrue")
-          let label0 = this.newid("iffalse")
-          let endif = this.newid("endif")
-          let brinst = Bri1(cdest,label1,label0)
-          //let brinst = Bri1(Register(ccast),label1,label0)
-          let predlabel = func.currentBBlabel()
-          func.add_inst(brinst) // close block
-          func.new_bb(label1) //|> ignore // open BB1
-          let dest1 = this.compile_expr(t,func)
-          let realabel1 = func.currentBBlabel()
-          func.add_inst(Br_uc(endif)) // close BB1
-          func.new_bb(label0) //|> ignore // open BB0
-          let dest0 = this.compile_expr(f,func)
-          let realabel0 = func.currentBBlabel()
-          func.add_inst(Br_uc(endif)) // close BB0
-          func.new_bb(endif) //|> ignore // open newBB
-          let desttype = translate_type(this.symbol_table.infer_type(t,0))
+        let cdest = this.compile_expr(bl, func)
+        //let ccast = this.newid("r")
+        //func.add_inst(Cast(ccast,"trunc",Basic("i32"),cdest,Basic("i1"))); // cdest is bool
+        let label1 = this.newid("iftrue")
+        let label0 = this.newid("iffalse")
+        let endif = this.newid("endif")
+        let brinst = Bri1(cdest,label1,label0)
+        //let brinst = Bri1(Register(ccast),label1,label0)
+        let predlabel = func.currentBBlabel()
+        func.add_inst(brinst) // close block
+        func.new_bb(label1) //|> ignore // open BB1
+        let dest1 = this.compile_expr(t,func)
+        let realabel1 = func.currentBBlabel()
+        func.add_inst(Br_uc(endif)) // close BB1
+        func.new_bb(label0) //|> ignore // open BB0
+        let dest0 = this.compile_expr(f,func)
+        let realabel0 = func.currentBBlabel()
+        func.add_inst(Br_uc(endif)) // close BB0
+        func.new_bb(endif) //|> ignore // open newBB
+        let desttype = translate_type(this.symbol_table.infer_type(t,0))
  
-          if desttype <> Void_t then 
-            let fdest = this.newid("r")
-            let phiinst = Phi2(fdest,desttype,dest1,realabel1,dest0,realabel0)
-            func.add_inst(phiinst)
-            Register(fdest)
-          else 
-            Novalue 
+        if desttype <> Void_t then 
+          let fdest = this.newid("r")
+          let phiinst = Phi2(fdest,desttype,dest1,realabel1,dest0,realabel0)
+          func.add_inst(phiinst)
+          Register(fdest)
+        else 
+          Novalue 
       // Ifelse        
-//      | Whileloop(bl,seq) ->
+      | Whileloop(bl,seq) ->
+        let bdest = this.compile_expr(bl,func)
+        
+        let cdest = this.compile_expr(seq,func)
+        Novalue
+      // Whileloop
       | Define(sbox,a) ->
-          let x = sbox.value
-          let cdest = this.compile_expr(a, func)
-          let entry = this.symbol_table.get_entry(x).Value // will error out in typechecking if None
-          let desttype = translate_type(entry.typeof)
-          let new_x = sprintf "%s_%d" x (entry.gindex) // will crash if user declares "r"
-          //let new_x = this.newid((sprintf "%s_%d" x (entry.gindex)))
-          func.add_inst(Alloca(new_x,desttype,None))
-          func.add_inst(Store(desttype,cdest,Register(new_x),None))
-          (*let r = this.newid("r")
-          func.add_inst(Load(r,desttype,Register(new_x)))
-          Register(r)*)
-          Register(new_x)
+        let x = sbox.value
+        let cdest = this.compile_expr(a, func)
+        let entry = this.symbol_table.get_entry(x).Value // will error out in typechecking if None
+        let desttype = translate_type(entry.typeof)
+        let new_x = sprintf "%s_%d" x (entry.gindex) // will crash if user declares "r"
+        //let new_x = this.newid((sprintf "%s_%d" x (entry.gindex)))
+        func.add_inst(Alloca(new_x,desttype,None))
+        func.add_inst(Store(desttype,cdest,Register(new_x),None))
+        (*let r = this.newid("r")
+        func.add_inst(Load(r,desttype,Register(new_x)))
+        Register(r)*)
+        Register(new_x) 
+      // Define
       | Var(s) ->  
-          let entry = this.symbol_table.get_entry(s).Value
-          let new_x = sprintf "%s_%d" s (entry.gindex)
-          let desttype = translate_type(entry.typeof)
-          let r = this.newid("r")
-          func.add_inst(Load(r, desttype, Register(new_x), None))
-          //Register(new_x)
-          Register(r)
+        let entry = this.symbol_table.get_entry(s).Value
+        let new_x = sprintf "%s_%d" s (entry.gindex)
+        let desttype = translate_type(entry.typeof)
+        let r = this.newid("r")
+        func.add_inst(Load(r, desttype, Register(new_x), None))
+        //Register(new_x)
+        Register(r)
       // Var
 //      | TypedDefine(tsbox,a) ->
 //      | Lambda -> Iconst(1)
@@ -540,13 +546,13 @@ type LLVMCompiler =
 //      | Let(sbox,a,bbox) -> Iconst(1)
 //      | TypedLet(tsbox,a,bbox) -> Iconst(1)
       | Setq(sbox,a) -> 
-          let x = sbox.value
-          let entry = this.symbol_table.get_entry(x).Value
-          let new_x = sprintf "%s_%d" x (entry.gindex)
-          let cdest = this.compile_expr(a, func)
-          let desttype = translate_type(entry.typeof)
-          func.add_inst(Store(desttype, cdest, Register(new_x), None))
-          Register(new_x)
+        let x = sbox.value
+        let entry = this.symbol_table.get_entry(x).Value
+        let new_x = sprintf "%s_%d" x (entry.gindex)
+        let cdest = this.compile_expr(a, func)
+        let desttype = translate_type(entry.typeof)
+        func.add_inst(Store(desttype, cdest, Register(new_x), None))
+        Register(new_x)
       // Setq
       | Uniop("display", a) ->
           match a with 
@@ -567,8 +573,13 @@ type LLVMCompiler =
             | Integer(i) ->
               func.add_inst(Call(None, Void_t,[], "lambda7c_printint", [(Basic("i32"), Iconst(i))]))
               Novalue
+            | Floatpt(f) ->
+              func.add_inst(Call(None, Void_t,[], "lambda7c_printfloat", [(Basic("double"), Fconst(f))]))
+              Novalue
+ 
             | _ -> Novalue
-//      | Sequence(abox::b) -> 
+      | Sequence(a) -> 
+        this.compile_seq(Sequence(a), func)
       | _ -> Iconst(0)
 
   member this.compile_seq(seq:expr, fn:LLVMFunction) = 
