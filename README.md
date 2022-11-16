@@ -14,9 +14,9 @@
 - Code Generation / Compiler --> llvmir.fs
 
 #### To compile all files:
-1. ```bash ./recompile\_dll.sh```  --> also generates .exe to run most recent addition to scope
+1. ```bash ./recompile_dll.sh```  --> also generates .exe to run most recent addition to scope
 OR 
-2. ```bash ./compile\_X``` where **X** is the name of the file to recompile
+2. ```bash ./compile_X``` where **X** is the name of the file to recompile
 
 ## Currently Unimplemented:
 - Vectors
