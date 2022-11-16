@@ -1,0 +1,68 @@
+#Rustlr/Fussless LL(1) grammar for a lisp-like language
+
+valuetype bool
+nonterminals Expr Pxpr Txpr Dxpr Binop Uniop
+nonterminals Pxprplus Pxprstar varstar Tcnt Txprplus
+lexterminal QUOTE '
+lexterminal NEG ~
+terminals + - * / % ^ ( ) = == < > <= >= ** [ ]
+terminals if define lambda let nil cons car cdr setq and or not eq neq
+terminals display fun while begin print of vget vmake vsetq
+terminals vec_setq vec_get vec_make
+valueterminal integer ~ int ~ Num ~ int
+valueterminal floatpt ~ float ~ Float ~ float
+valueterminal strlit ~ string ~ StrLit ~ (fun x -> x.Substring(1,x.Length-2))
+valueterminal var ~ string ~ Alphanum ~ (fun x -> x)
+lexterminal Int_t int
+lexterminal Float_t float
+lexterminal String_t string
+lexterminal Vec_t vec
+lexterminal ARROW ->
+lexterminal COLON :
+lexterminal COMMA ,
+lexterminal DOLLAR $
+lexterminal DOT .
+
+# top sym is Pxpr, not Expr, the parentheses are not optional
+topsym Pxprplus
+resync )
+
+Pxpr --> integer | floatpt | strlit
+Pxpr --> var
+Pxpr --> nil
+Pxpr --> ( Expr )
+
+Expr --> Binop Pxpr Pxpr
+Expr --> Uniop Pxpr
+Expr --> if Pxpr Pxpr Pxpr
+#Expr --> define var Pxpr
+Expr --> define var Dxpr
+Dxpr --> Pxpr
+Dxpr --> COLON Txpr Pxpr
+
+Expr --> lambda ( varstar ) Pxpr
+Expr --> QUOTE Pxpr
+Expr --> setq var Pxpr
+Expr --> let ( var Pxpr ) Pxpr
+# application of a function to arguments
+Expr --> Pxprplus
+Pxprplus --> Pxpr Pxprstar
+Pxprstar -->  | Pxpr Pxprstar
+varstar -->
+varstar --> var varstar
+
+Binop -->  + | - | * | / | % | ^ | cons
+Uniop --> NEG | car | cdr
+
+#Type expressions
+Txpr --> Int_t | Float_t | String_t
+Txpr --> Vec_t < Txpr >
+#Txpr --> ( Txpr<*+> )
+Txpr --> fun Txpr ARROW Txpr
+
+Txpr --> ( Txprplus )
+Txprplus --> Txpr Tcnt
+Tcnt --> * Txprplus
+Tcnt --> 
+
+EOF
