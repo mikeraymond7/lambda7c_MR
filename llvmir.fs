@@ -289,11 +289,11 @@ type LLVMprogram =
 
       for b in fn.body do
 
-        code_gen <- code_gen + sprintf "\n%s:"  (b.label)
+        code_gen <- code_gen + sprintf "\n\n%s:"  (b.label)
 
         for i in b.body do
 
-          code_gen <- code_gen + "\n" + iToString(i)
+          code_gen <- code_gen + "\n  " + iToString(i)
 
       code_gen <- code_gen + "\n}"
     code_gen <- code_gen + "\n" + this.postamble
@@ -301,8 +301,6 @@ type LLVMprogram =
   
   member this.add_preamble(s) = 
     this.preamble <- this.preamble + "\n" + s
-
-
 
 type LLVMCompiler =
   {
@@ -334,7 +332,6 @@ type LLVMCompiler =
         if rtype = Basic("double") then
           func.add_inst(Binaryop(r1, "fadd", rtype, adest, bdest))
         else
-          printfn "RTYPE: %A" rtype
           func.add_inst(Binaryop(r1, "add", rtype, adest, bdest))
         Register(r1)
       // Binop *
@@ -404,15 +401,26 @@ type LLVMCompiler =
           func.add_inst(Icmp(r1, "eq", rtype, adest, bdest))
         Register(r1)
       // Binop *
+      | Binop("<=",a,b) -> 
+        let adest = this.compile_expr(a, func)
+        let bdest = this.compile_expr(b, func)
+        let r1 = this.newid("r")
+        let rtype = translate_type(this.symbol_table.infer_type(a,0))
+        if rtype = Basic("double") then
+          func.add_inst(Fcmp(r1, "ole", rtype, adest, bdest))
+        else
+          func.add_inst(Icmp(r1, "sle", rtype, adest, bdest))
+        Register(r1)
+      // Binop *
       | Binop(">=",a,b) -> 
         let adest = this.compile_expr(a, func)
         let bdest = this.compile_expr(b, func)
         let r1 = this.newid("r")
         let rtype = translate_type(this.symbol_table.infer_type(a,0))
         if rtype = Basic("double") then
-          func.add_inst(Fcmp(r1, "sge", rtype, adest, bdest))
+          func.add_inst(Fcmp(r1, "oge", rtype, adest, bdest))
         else
-          func.add_inst(Icmp(r1, "oge", rtype, adest, bdest))
+          func.add_inst(Icmp(r1, "sge", rtype, adest, bdest))
         Register(r1)
       // Binop *
       | Binop("%",a,b) -> 
@@ -421,7 +429,7 @@ type LLVMCompiler =
         let r1 = this.newid("r")
         let rtype = translate_type(this.symbol_table.infer_type(a,0))
         if rtype = Basic("double") then
-          func.add_inst(Fcmp(r1, "srem", rtype, adest, bdest))
+          func.add_inst(Fcmp(r1, "frem", rtype, adest, bdest))
         else
           func.add_inst(Icmp(r1, "srem", rtype, adest, bdest))
         Register(r1)
@@ -492,14 +500,17 @@ type LLVMCompiler =
         //let brinst = Bri1(Register(ccast),label1,label0)
         let predlabel = func.currentBBlabel()
         func.add_inst(brinst) // close block
+
         func.new_bb(label1) //|> ignore // open BB1
         let dest1 = this.compile_expr(t,func)
         let realabel1 = func.currentBBlabel()
         func.add_inst(Br_uc(endif)) // close BB1
+
         func.new_bb(label0) //|> ignore // open BB0
         let dest0 = this.compile_expr(f,func)
         let realabel0 = func.currentBBlabel()
         func.add_inst(Br_uc(endif)) // close BB0
+
         func.new_bb(endif) //|> ignore // open newBB
         let desttype = translate_type(this.symbol_table.infer_type(t,0))
  
@@ -512,9 +523,31 @@ type LLVMCompiler =
           Novalue 
       // Ifelse        
       | Whileloop(bl,seq) ->
+
+
+
+        // basic block labels for function
+        let label_check = this.newid("check")
+        let label_loop = this.newid("loop")
+        let label_endloop = this.newid("endloop")
+
+        let br_uc = Br_uc(label_check)
+        func.add_inst(br_uc) // close current label
+
+        func.new_bb(label_check) // open check:
         let bdest = this.compile_expr(bl,func)
+
+        let brinst = Bri1(bdest, label_loop,label_endloop)
+        let predlabel = func.currentBBlabel()
+        func.add_inst(brinst) // close check:
+
+        func.new_bb(label_loop) // open loop:
+        let destloop = this.compile_expr(seq,func)
+        let realooplabel = func.currentBBlabel()
+        func.add_inst(Br_uc(label_check)) // close loop:
+
+        func.new_bb(label_endloop) // open endloop:
         
-        let cdest = this.compile_expr(seq,func)
         Novalue
       // Whileloop
       | Define(sbox,a) ->
@@ -526,16 +559,13 @@ type LLVMCompiler =
         //let new_x = this.newid((sprintf "%s_%d" x (entry.gindex)))
         func.add_inst(Alloca(new_x,desttype,None))
         func.add_inst(Store(desttype,cdest,Register(new_x),None))
-        (*let r = this.newid("r")
-        func.add_inst(Load(r,desttype,Register(new_x)))
-        Register(r)*)
         Register(new_x) 
       // Define
       | Var(s) ->  
         let entry = this.symbol_table.get_entry(s).Value
         let new_x = sprintf "%s_%d" s (entry.gindex)
         let desttype = translate_type(entry.typeof)
-        let r = this.newid("r")
+        let r = this.newid(s)
         func.add_inst(Load(r, desttype, Register(new_x), None))
         //Register(new_x)
         Register(r)
@@ -579,8 +609,21 @@ type LLVMCompiler =
  
             | _ -> Novalue
       | Sequence(a) -> 
-        this.compile_seq(Sequence(a), func)
+        this.compile_beginseq(Sequence(a), func)
       | _ -> Iconst(0)
+
+  member this.compile_beginseq(seq:expr, fn:LLVMFunction) = 
+    match seq with
+      | Sequence(a) ->
+        let mutable res = Novalue
+        for ex in a do
+          //printfn "Compilation Successful"
+          res <- this.compile_expr(ex.value, fn) 
+        res
+      | _ -> 
+        printfn "I don't know if I can help you"
+        Novalue
+
 
   member this.compile_seq(seq:expr, fn:LLVMFunction) = 
     match seq with
@@ -656,14 +699,6 @@ let compile(trace) =
       let gen_code = complr.compile_program(a)
       printfn "%s" gen_code
 
-      (*let t = typecheck(complr.symbol_table,a,trace)
-      match t with
-        | LLuntypable -> printfn "UNTYPABLE EXPRESSIONS CANNOT COMPILE"
-        | _ -> 
-          let gen_code = complr.compile_program(a)
-          //printfn "Code:\n%s" gen_code
-          printfn "%s" gen_code
-       *)
     | None -> printfn "CANNOT COMPILE ---- FAILED TO PARSE"
 
-compile(true)
+compile(false)
