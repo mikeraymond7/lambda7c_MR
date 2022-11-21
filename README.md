@@ -20,5 +20,10 @@ OR
 
 ## Currently Unimplemented:
 - Vectors
+- Comments 
+- Functions (Type check, do not generate code)
 
 ## Needs Fix
+- Reading Multiline Functions (Reads one line from STDIN)
+- Uniop "display" does not display strings, only numbers
+  - Must compile strings first

@@ -86,9 +86,8 @@ type Instruction =
 let rec exToString(e:LLVMexpr) = 
   match e with
     | Iconst(i) -> i.ToString()
-    //| Sconst(s) -> s.Replace("\"","")
-    | Sconst(s) -> 
-      sprintf "c\"%s\\00\"" (s.Replace("\"",""))
+    //| Sconst(s) -> "c\"" + s + "\""
+    | Sconst(s) -> s
     | Fconst(f) -> f.ToString()
     | I1const(b) -> b.ToString()
     | Register(r) -> "%" + r
@@ -191,7 +190,7 @@ let translate_type(ty:lltype) = // returns LLVMtype
   match ty with
     | LLint -> Basic("i32")
     | LLfloat -> Basic("double")
-    | LLstring -> Pointer(Basic("i8")) 
+    | LLstring -> Pointer(Basic("i8")) // dis wrong bruv
     | _ -> Void_t
 
 
@@ -586,21 +585,6 @@ type LLVMCompiler =
         Register(new_x)
       // Setq
       | Uniop("display", a) ->
-          let bdest = this.compile_expr(a)
-          let rtype = translate_type(this.symbol_table.infer_type(a,0))
-          match rtype with 
-            | Basic("i32") ->
-              func.add_inst(Call(None, Void_t,[], "lambda7c_printint", [(Basic("i32"), bdest)]))
-              None
-            | Basic("double") -> 
-              func.add_inst(Call(None, Void_t,[], "lambda7c_printfloat", [(Basic("double"), bdest)]))
-              None
-            | Pointer(Basic("i8")) -> 
-              func.add_inst(Call(None, Void_t,[], "lambda7c_printstr", [(Pointer(Basic("i8")), bdest)]))
-              None
-              
-              
-(*
           match a with 
             | Var(x) -> 
               let entry = this.symbol_table.get_entry(x).Value
@@ -622,19 +606,8 @@ type LLVMCompiler =
             | Floatpt(f) ->
               func.add_inst(Call(None, Void_t,[], "lambda7c_printfloat", [(Basic("double"), Fconst(f))]))
               Novalue
-            | Strlit(s) ->
-              let str = this.newid(".str")
-              // @str1 = constant [16 x i8] c"gcd(16,6) = %d\0a\00", align 1
-              this.program.add_preamble(sprintf "@%s = constant [%d x i8] %s, align 1" str (s.Length - 1) (exToString(Sconst(s))))
-              let r = this.newid("r")
-              func.add_inst(Arrayindex(r, (s.Length-1), Basic("i8"), Global(str), Iconst(0)))
-              func.add_inst(Call(None, Void_t,[], "lambda7c_printstr", [(Pointer(Basic("i8")), Register(r))]))
-              Novalue
-              
- *)
-            | axpr -> 
-              let atype = this.symbol_table.infer_type(axpr,0)
-              Novalue
+ 
+            | _ -> Novalue
       | Sequence(a) -> 
         this.compile_beginseq(Sequence(a), func)
       | _ -> Iconst(0)
@@ -728,4 +701,4 @@ let compile(trace) =
 
     | None -> printfn "CANNOT COMPILE ---- FAILED TO PARSE"
 
-compile(true)
+compile(false)

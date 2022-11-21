@@ -34,6 +34,7 @@ type expr =
   | TypeExpr of lltype
   | Typedval of (lltype*expr)
   | Label of string
+  //| Comment of string
   | Error
 
 and lltype = 
@@ -211,13 +212,18 @@ G.valueterminal("var","Alphanum", fun n -> Var(n))
 G.valueterminal("str","StrLit", fun n -> Strlit(string n))
 
 // took out P (Liang)
-G.nonterminals(["Program";"POpt";"Expr";"Axpr";"Binop";"Uniop";"SeqExpr";"SeqOpt";"BeginSeq";"SeqVar";"Txpr";"typeopt";"Lam";"Var";"VarOpt";"GetBin"]);
+G.nonterminals(["Program";"POpt";"Expr";"Axpr";"Binop";"Uniop";"SeqExpr";"SeqOpt";"BeginSeq";"SeqVar";"Txpr";"typeopt";"Lam";"Var";"VarOpt";"GetBin";]);
 
 // Program Start
 G.production("POpt --> Program", fun n -> n.[0].value)
 G.production("POpt -->",semactNil)
 
+// Comments
+//G.production("Cmnt -> // Strs", )
+//G.production("Strs -> 
+
 // Expressions
+//G.production("Expr --> Cmnt",fun n -> Comment(n.value))
 G.production("Expr --> GetBin",fun n -> n.[0].value)
 G.production("Expr --> Uniop Axpr",semactUni)
 G.production("Expr --> if ( GetBin ) Axpr Axpr",semactIf)

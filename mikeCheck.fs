@@ -83,6 +83,12 @@ type SymbolTable = // wrapping structure for symbol table frames
         frame <- frame.Value.parent_scope
     entry
 
+  member this.in_scope(var) = 
+    // only return if var is in current scope
+    if this.current_frame.entries.ContainsKey(var) then
+      Some(this.current_frame.entries.[var])
+    else None
+
   member this.infer_type (expression:expr, line:int) = 
     match expression with 
       | Integer(_) -> LLint
@@ -182,10 +188,10 @@ type SymbolTable = // wrapping structure for symbol table frames
           | Some(x) -> (x.typeof)
       | Define(x,a) ->
         let s = x.value
-        let entry = this.get_entry(s)
+        let entry = this.in_scope(s)
         match entry with
           | Some(w) -> 
-            printfn "Line %d, Column %d: '%s' has already been defined" (x.line) (x.column) (s)
+            printfn "Line %d, Column %d: '%s' has already been defined in this scope" (x.line) (x.column) (s)
             LLuntypable
           | None ->
             // cannot be Lambda based on grammar
@@ -200,10 +206,10 @@ type SymbolTable = // wrapping structure for symbol table frames
       | TypedDefine(x,a) ->
         match x.value with 
           | (tyv,s) ->
-            let entry = this.get_entry(s)
+            let entry = this.in_scope(s)
             match entry with
               | Some(a) -> 
-                printfn "Line %d, Column %d: '%s' has already been defined" (x.line) (x.column) (s)
+                printfn "Line %d, Column %d: '%s' has already been defined in this scope" (x.line) (x.column) (s)
                 LLuntypable
               | None -> 
                 match a with 
@@ -216,8 +222,8 @@ type SymbolTable = // wrapping structure for symbol table frames
                     for i in param do
                       match i.value with
                         | TypedVar(ty,s) -> 
-                          if isSome(this.get_entry(s)) then
-                            printfn "Line %d, Column %d: Parameter '%s' has already been defined" (i.line) (i.column) s // looks through all scopes but should only check current scope
+                          if isSome(this.in_scope(s)) then
+                            printfn "Line %d, Column %d: Parameter '%s' has already been definedin the current scope" (i.line) (i.column) s // looks through all scopes but should only check current scope
                             isUntypable <- true
                             ptypes <- LLuntypable::ptypes
                           else 

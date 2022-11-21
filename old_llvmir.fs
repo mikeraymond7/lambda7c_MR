@@ -191,7 +191,7 @@ let translate_type(ty:lltype) = // returns LLVMtype
   match ty with
     | LLint -> Basic("i32")
     | LLfloat -> Basic("double")
-    | LLstring -> Pointer(Basic("i8")) 
+    | LLstring -> Pointer(Basic("i8")) // dis wrong bruv
     | _ -> Void_t
 
 
@@ -586,21 +586,8 @@ type LLVMCompiler =
         Register(new_x)
       // Setq
       | Uniop("display", a) ->
-          let bdest = this.compile_expr(a)
-          let rtype = translate_type(this.symbol_table.infer_type(a,0))
-          match rtype with 
-            | Basic("i32") ->
-              func.add_inst(Call(None, Void_t,[], "lambda7c_printint", [(Basic("i32"), bdest)]))
-              None
-            | Basic("double") -> 
-              func.add_inst(Call(None, Void_t,[], "lambda7c_printfloat", [(Basic("double"), bdest)]))
-              None
-            | Pointer(Basic("i8")) -> 
-              func.add_inst(Call(None, Void_t,[], "lambda7c_printstr", [(Pointer(Basic("i8")), bdest)]))
-              None
-              
-              
-(*
+          //let bdest = this.compile_expr(a)
+          //let rtype = translate_type(this.symbol_table.infer_type(a,0))
           match a with 
             | Var(x) -> 
               let entry = this.symbol_table.get_entry(x).Value
@@ -631,7 +618,7 @@ type LLVMCompiler =
               func.add_inst(Call(None, Void_t,[], "lambda7c_printstr", [(Pointer(Basic("i8")), Register(r))]))
               Novalue
               
- *)
+ 
             | axpr -> 
               let atype = this.symbol_table.infer_type(axpr,0)
               Novalue
