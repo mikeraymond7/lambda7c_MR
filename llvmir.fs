@@ -87,8 +87,7 @@ let rec exToString(e:LLVMexpr) =
   match e with
     | Iconst(i) -> i.ToString()
     //| Sconst(s) -> s.Replace("\"","")
-    | Sconst(s) -> 
-      sprintf "c\"%s\\00\"" (s.Replace("\"",""))
+    | Sconst(s) -> sprintf "c\"%s\\00\"" (s.Replace("\"",""))
     | Fconst(f) -> f.ToString()
     | I1const(b) -> b.ToString()
     | Register(r) -> "%" + r
@@ -321,7 +320,21 @@ type LLVMCompiler =
     match ex with 
       | Integer(x) -> Iconst(x)
       | Floatpt(f) -> Fconst(f)
-      | Strlit(s) -> Sconst(s)
+      | Strlit(s) -> 
+        let str = exToString(Sconst(s))
+        let byte_str = str.Replace("\\n","\\0A")
+        let num_0A = byte_str.Length-str.Length
+        printfn "Num 0A: %d" num_0A
+
+        let sname = this.newid(".str")
+        // remove length for 2 quotes, char c, ending \00, and all \0A
+        let len = byte_str.Length - (5+num_0A * 2)
+        let gconst = this.program.add_preamble(sprintf "@%s = constant [%d x i8] %s, align 1" sname len (byte_str))
+        let r = this.newid("r")
+        let arr = Arrayindex(r,(len), Basic("i8"), Global(sname), Iconst(0))
+        func.add_inst(arr)
+        Register(r)
+
 //      | TypedVar(ty,s) ->
 //      | Nil ->
 //      | Uniop(s,a) ->
@@ -524,9 +537,6 @@ type LLVMCompiler =
           Novalue 
       // Ifelse        
       | Whileloop(bl,seq) ->
-
-
-
         // basic block labels for function
         let label_check = this.newid("check")
         let label_loop = this.newid("loop")
@@ -586,18 +596,21 @@ type LLVMCompiler =
         Register(new_x)
       // Setq
       | Uniop("display", a) ->
-          let bdest = this.compile_expr(a)
+          let bdest = this.compile_expr(a,func)
           let rtype = translate_type(this.symbol_table.infer_type(a,0))
           match rtype with 
             | Basic("i32") ->
               func.add_inst(Call(None, Void_t,[], "lambda7c_printint", [(Basic("i32"), bdest)]))
-              None
+              Novalue
             | Basic("double") -> 
               func.add_inst(Call(None, Void_t,[], "lambda7c_printfloat", [(Basic("double"), bdest)]))
-              None
+              Novalue
             | Pointer(Basic("i8")) -> 
               func.add_inst(Call(None, Void_t,[], "lambda7c_printstr", [(Pointer(Basic("i8")), bdest)]))
-              None
+              Novalue
+            | t -> 
+              printfn "Unsupported print type '%A'" t
+              Novalue
               
               
 (*
@@ -631,15 +644,15 @@ type LLVMCompiler =
               func.add_inst(Call(None, Void_t,[], "lambda7c_printstr", [(Pointer(Basic("i8")), Register(r))]))
               Novalue
               
- *)
             | axpr -> 
               let atype = this.symbol_table.infer_type(axpr,0)
               Novalue
+ *)
       | Sequence(a) -> 
-        this.compile_beginseq(Sequence(a), func)
+        this.compile_seq(Sequence(a), func)
       | _ -> Iconst(0)
 
-  member this.compile_beginseq(seq:expr, fn:LLVMFunction) = 
+  member this.compile_seq(seq:expr, fn:LLVMFunction) = 
     match seq with
       | Sequence(a) ->
         let mutable res = Novalue
@@ -652,7 +665,7 @@ type LLVMCompiler =
         Novalue
 
 
-  member this.compile_seq(seq:expr, fn:LLVMFunction) = 
+  member this.compile_mainseq(seq:expr, fn:LLVMFunction) = 
     match seq with
       | Sequence(a) ->
         let mutable res = Novalue
@@ -686,7 +699,7 @@ type LLVMCompiler =
           }
           mainfunc.new_bb("beginmain") //|> ignore
     
-          let mainres = this.compile_seq(mainseq, mainfunc)
+          let mainres = this.compile_mainseq(mainseq, mainfunc)
           let ret:Instruction = Ret(Basic("i32"),Iconst(0))
           mainfunc.add_inst(ret)
           
@@ -728,4 +741,5 @@ let compile(trace) =
 
     | None -> printfn "CANNOT COMPILE ---- FAILED TO PARSE"
 
-compile(true)
+//compile(true)
+compile(false)
