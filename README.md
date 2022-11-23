@@ -14,11 +14,11 @@
 - Code Generation / Compiler --> llvmir.fs
 
 #### To compile all files:
-1. ```bash ./recompile_dll.sh```  --> also generates .exe to run most recent addition to scope
+1. ``` ./recompile_dll.sh```  --> also generates .exe to run most recent addition to scope
 OR
-2. ```bash ./test3.sh``` --> compiles all .dll's and runs testcases/test3_oneline.7c
+2. ``` ./test3.sh``` --> compiles all .dll's and runs testcases/test3_oneline.7c
   
-Note: To run with Tracing, enter llvmir.fs, go to bottom of file, and turn ```bash compile(false)``` --> ```bash compile(true)```
+Note: To run with Tracing, enter llvmir.fs, go to bottom of file, and turn ``` compile(false)``` --> ``` compile(true)```
 
 ## Currently Unimplemented:
 - Vectors (Still not parsing properly)
