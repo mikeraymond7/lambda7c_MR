@@ -1,6 +1,0 @@
-To compile, simply run the shell script "compile_lambda7c.sh"
-The compiler code exists within llvmir.fs and is compiled to llvmir.exe
-
-
-Running the executable opens STD_IN to write commands
-For trace, go to the bottom of the llvmir.fs file and change "compile(true)" to "compile(false)"

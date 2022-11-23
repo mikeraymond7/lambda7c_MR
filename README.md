@@ -15,15 +15,15 @@
 
 #### To compile all files:
 1. ```bash ./recompile_dll.sh```  --> also generates .exe to run most recent addition to scope
-OR 
-2. ```bash ./compile_X``` where **X** is the name of the file to recompile
+OR
+2. ```bash ./test3.sh``` --> compiles all .dll's and runs testcases/test3_oneline.7c
+  
+Note: To run with Tracing, enter llvmir.fs, go to bottom of file, and turn ```bash compile(false)``` --> ```bash compile(true)```
 
 ## Currently Unimplemented:
-- Vectors
+- Vectors (Still not parsing properly)
 - Comments 
 - Functions (Type check, do not generate code)
 
 ## Needs Fix
 - Reading Multiline Functions (Reads one line from STDIN)
-- Uniop "display" does not display strings, only numbers
-  - Must compile strings first

@@ -324,10 +324,9 @@ type LLVMCompiler =
         let str = exToString(Sconst(s))
         let byte_str = str.Replace("\\n","\\0A")
         let num_0A = byte_str.Length-str.Length
-        printfn "Num 0A: %d" num_0A
-
         let sname = this.newid(".str")
-        // remove length for 2 quotes, char c, ending \00, and all \0A
+        // remove length for 2 quotation marks, char c, ending \00, and all \0A
+
         let len = byte_str.Length - (5+num_0A * 2)
         let gconst = this.program.add_preamble(sprintf "@%s = constant [%d x i8] %s, align 1" sname len (byte_str))
         let r = this.newid("r")
