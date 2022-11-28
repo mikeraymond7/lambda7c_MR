@@ -34,6 +34,7 @@ type expr =
   | TypeExpr of lltype
   | Typedval of (lltype*expr)
   | Label of string
+  //| Comment of string
   | Error
 
 and lltype = 
@@ -91,9 +92,10 @@ let semactWhl(rhs:Vec<Stackitem<expr>>) =
 let semactDef(rhs:Vec<Stackitem<expr>>) = 
   match (rhs.[1].value, rhs.[2].value) with 
     | (TypedVar(ty,a), axpr) -> TypedDefine(rhs.[1].tolbox((ty,a)), axpr)
-    | (Var(a), axpr) -> 
-      printfn "Line %d Column %d: expected type for var '%s'" (rhs.[0].line) (rhs.[0].column) a
-      Define(rhs.[1].tolbox(a), axpr)
+    | (Var(a), TypedLambda(b, ty,axpr)) -> 
+      printfn "Line %d Column %d: Lambda definition requires type for '%s'" (rhs.[1].line) (rhs.[1].column) a
+      Error
+    | (Var(a), axpr) -> Define(rhs.[1].tolbox(a), axpr)
     //| (Var(a), axpr) -> Define(rhs.[1].tolbox(a), axpr)
     | _ -> Error
 
@@ -210,13 +212,18 @@ G.valueterminal("var","Alphanum", fun n -> Var(n))
 G.valueterminal("str","StrLit", fun n -> Strlit(string n))
 
 // took out P (Liang)
-G.nonterminals(["Program";"POpt";"Expr";"Axpr";"Binop";"Uniop";"SeqExpr";"SeqOpt";"BeginSeq";"SeqVar";"Txpr";"typeopt";"Lam";"Var";"VarOpt";"GetBin"]);
+G.nonterminals(["Program";"POpt";"Expr";"Axpr";"Binop";"Uniop";"SeqExpr";"SeqOpt";"BeginSeq";"SeqVar";"Txpr";"typeopt";"Lam";"Var";"VarOpt";"GetBin";]);
 
 // Program Start
 G.production("POpt --> Program", fun n -> n.[0].value)
 G.production("POpt -->",semactNil)
 
+// Comments
+//G.production("Cmnt -> // Strs", )
+//G.production("Strs -> 
+
 // Expressions
+//G.production("Expr --> Cmnt",fun n -> Comment(n.value))
 G.production("Expr --> GetBin",fun n -> n.[0].value)
 G.production("Expr --> Uniop Axpr",semactUni)
 G.production("Expr --> if ( GetBin ) Axpr Axpr",semactIf)
@@ -289,6 +296,7 @@ G.production("Binop --> DIV",semactLab)
 G.production("Binop --> >",semactLab)  
 G.production("Binop --> <",semactLab)  
 G.production("Binop --> =",semactLab)  
+G.production("Binop --> <=",semactLab)  
 G.production("Binop --> >=",semactLab)  
 G.production("Binop --> %",semactLab) 
 G.production("Binop --> neq",semactLab) 
@@ -309,15 +317,15 @@ G.production("Uniop --> display",semactLab)
 // main
 
 let parse(trace:bool) =
-  let mutable TRACE = trace
-  if TRACE then G.printgrammar()
-  printf "Enter Expression: "
+  if trace then 
+    G.printgrammar()
+    printf "Enter Expression: "
   let lexer1 = Fussless.schemerlexer(Console.ReadLine()); // compile with schemer_lex.dll
-  let parser1 = make_parser<expr>(G, lexer1, TRACE);
+  let parser1 = make_parser<expr>(G, lexer1, trace);
 
   let result = parser1.parse(trace)
   if not (parser1.errors) then 
-    printfn "result = %A" result
+    if trace then printfn "result = %A" result
     Some(result)
   else
     printfn "FAILED TO PARSE" 
