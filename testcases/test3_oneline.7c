@@ -1,0 +1,1 @@
+(define x 1) (define y 0) (while (< x 10) (begin (setq y 1) (while (< y 10) (begin (display (* x y)) (if (< (* x y) 10) (display "   ") (display "  ")) (setq y (+ y 1)) )) (display "\n") (setq x (+ x 1)) )) 

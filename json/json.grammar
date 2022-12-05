@@ -1,0 +1,76 @@
+# Rustlr/Fussless Grammar for JSON, F# version
+!open Option;
+!type jval = Integer of int | Float of float | Bool of bool | Null | Str of string | Map of Dictionary<string,jval> | Seq of ResizeArray<jval>
+
+!let rec jsondumps = function
+!  | jval.Integer(n) -> string(n)
+!  | Float(n) -> string(n)
+!  | Bool(n) -> string(n)
+!  | Null -> "null"
+!  | Str(s) -> s  //"\"" + s + "\""
+!  | Seq(s) ->
+!     let mutable atleastone = false
+!     let mutable str = "["
+!     for v in s do
+!        if atleastone then str <- str + ", "
+!        atleastone <- true
+!        str <- str + (jsondumps v)
+!     str + "]"
+!  | Map(m) ->
+!     let mutable atleastone = false
+!     let mutable str = "{"
+!     for kvp in m do
+!        if atleastone then str <- str + ", "
+!        atleastone <- true
+!        str <- str + (sprintf "%s:%s" kvp.Key (jsondumps kvp.Value))
+!     str + "}"
+
+valuetype jval
+lexterminal LBRACE {
+lexterminal RBRACE }
+lexterminal LBRACK [
+lexterminal RBRACK ]
+lexterminal LPAREN (
+lexterminal RPAREN )
+lexterminal COLON :
+lexterminal NULL null
+lexterminal MINUS -
+lexterminal TRUE true
+lexterminal FALSE false
+lexterminal COMMA ,
+valueterminal STRING~ string ~ StrLit ~ (fun (x:string) -> x.Substring(1,x.Length-2))
+valueterminal NUM~ int~ Num~ int
+valueterminal FLOAT~ float ~ Float~ float
+#valueterminal BIGNUM~ &'lt str~ BigNumber(n)~ n
+
+nonterminals Value
+nonterminal Object Dictionary<string,jval>
+nonterminal List ResizeArray<jval>
+nonterminal Integer int
+nonterminal Floatpt float
+nonterminal Boolean bool
+nonterminal KeyValuePair (string*jval)
+topsym Value
+resync COMMA RBRACK RBRACE
+
+Integer --> MINUS?:m NUM:n {if (isNone m) then n else -1*n}
+Floatpt --> MINUS?:m FLOAT:n {if (isNone m) then n else -1.0*n}
+Boolean --> TRUE {true} | FALSE {false}
+
+Value --> Integer:n { jval.Integer(n) }
+Value --> Floatpt:n   { jval.Float(n) }
+Value --> Boolean:b { jval.Bool(b) }
+Value --> STRING:s {jval.Str(s)}
+Value --> Object:s {jval.Map(s)}
+Value --> List:s {jval.Seq(s)}
+Value --> NULL {jval.Null}
+Value --> LPAREN Value:v RPAREN {v}
+KeyValuePair --> STRING:k COLON Value:v { (k,v) }
+List --> LBRACK Value<COMMA*>:vs RBRACK { vs }
+Object:Map ==> LBRACE KeyValuePair<COMMA*>:kvs RBRACE  {
+  let map = Dictionary<string,jval>()
+  for (key,value) in kvs do map.[key]<-value
+  map
+  } <==
+
+EOF
