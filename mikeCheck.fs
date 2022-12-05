@@ -217,11 +217,9 @@ type SymbolTable = // wrapping structure for symbol table frames
                 LLuntypable
               | None -> 
                 match a with 
-                  | TypedLambda(param, ty, axpr) -> // NOT DONE
+                  | TypedLambda(param, ty, axpr) ->
                     // x:LBox<expr> list
                     let mutable ptypes = []
-                    (*this.add_entry(s, ty, Some(axpr.value))
-                    this.push_frame(s, x.line, x.column)*)
                     let mutable isUntypable = false
                     for i in param do
                       match i.value with
@@ -242,7 +240,7 @@ type SymbolTable = // wrapping structure for symbol table frames
                     for i in ptypes do
                       ptypes_rev <- i::ptypes_rev
 
-                    this.add_entry(s, LLfun(ptypes,ty), Some(axpr.value))
+                    this.add_entry(s, LLfun(ptypes_rev,ty), Some(axpr.value))
                     this.push_frame(s, x.line, x.column)
 
                     let atype = this.infer_type(axpr.value,axpr.line)
@@ -282,9 +280,8 @@ type SymbolTable = // wrapping structure for symbol table frames
                 let axtype = this.infer_type(axpr.value, axpr.line)
                 axtype
       | TypedLambda(param, ty, axpr) -> 
-        let axtype = this.infer_type(axpr.value, line) 
         let mutable ptypes = []
-        this.push_frame("tempLam",axpr.line,axpr.column)
+        // this.push_frame("tempLam",axpr.line,axpr.column)
         for i in param do
           match i.value with
             | Var(s) -> 
@@ -298,7 +295,13 @@ type SymbolTable = // wrapping structure for symbol table frames
         let mutable ptypes_rev = []
         for i in ptypes do
           ptypes_rev <- i::ptypes_rev
-        let ret = LLfun(ptypes_rev, this.infer_type(axpr.value,axpr.line))
+
+        this.add_entry((sprintf "tempLam%d%d" (axpr.line) (axpr.column)) , LLfun(ptypes_rev,ty), Some(axpr.value))
+        this.push_frame("tempLam",axpr.line,axpr.column)
+
+        let axtype = this.infer_type(axpr.value, line) 
+        let ret = LLfun(ptypes_rev, axtype)
+        this.add_entry((sprintf "tempLam%d%d" (axpr.line) (axpr.column)) , ret, Some(axpr.value))
 
         if (ty = LLunknown || axtype = ty) && axtype <> LLuntypable then  
           this.pop_frame() |> ignore

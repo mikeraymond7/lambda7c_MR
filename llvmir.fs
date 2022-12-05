@@ -560,10 +560,27 @@ type LLVMCompiler =
         
         Novalue
       // Whileloop
-      | Define(sbox,a) ->
+(*
+      | App(xbox, seq) ->
+        let x = sbox.value
+        // compile each item in params and use compiled registers for function call
+        //let reg_params = 
+        Iconst(0)
+      // App
+
+      | TypedDefine(stbox, TypedLambda(param, tyv, a)) ->
+        let (s, ty) = stbox.value
+        let entry = this.symbol_table.get_entry(s).Value
+        let funname = this.newid((sprintf "%s_%d" s (entry.gindex)))
+        let cdest = this.compile_expr(TypedLambda(param,tyv,a))
+        //func.add_inst(Call(
+        Iconst(0)
+*)
+      // TypedDefine Lambdas
+      | Define(sbox,a) -> // cannot be lambda 
         let x = sbox.value
         let cdest = this.compile_expr(a, func)
-        let entry = this.symbol_table.get_entry(x).Value // will error out in typechecking if None
+        let entry = this.symbol_table.get_entry(x).Value // will error out in typechecking phase if None
         let desttype = translate_type(entry.typeof)
         let new_x = sprintf "%s_%d" x (entry.gindex) // will crash if user declares "r"
         //let new_x = this.newid((sprintf "%s_%d" x (entry.gindex)))
@@ -656,7 +673,6 @@ type LLVMCompiler =
       | Sequence(a) ->
         let mutable res = Novalue
         for ex in a do
-          //printfn "Compilation Successful"
           res <- this.compile_expr(ex.value, fn) 
         res
       | _ -> 
