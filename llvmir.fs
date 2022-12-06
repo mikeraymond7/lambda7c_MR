@@ -268,6 +268,17 @@ type LLVMprogram =
      functions: Vec<LLVMFunction>;
      mutable postamble : string;  // stuff you don't want to know about
   }
+  
+  member this.add_new_func(fname, args, rty) = 
+    let func = {
+      name = fname
+      formal_args = args 
+      return_type = rty
+      body = Vec()
+      attributes = Vec()
+    }
+    this.functions.Add(func)
+    func
 
   member this.to_string() = 
     let mutable code_gen = this.preamble 
@@ -334,7 +345,7 @@ type LLVMCompiler =
         func.add_inst(arr)
         Register(r)
 
-//      | TypedVar(ty,s) ->
+//      | TypedVar(ty,s) -> // no case for this
 //      | Nil ->
 //      | Uniop(s,a) ->
       | Binop("+",a,b) -> 
@@ -560,22 +571,39 @@ type LLVMCompiler =
         
         Novalue
       // Whileloop
-(*
+(* --------------------------------------
       | App(xbox, seq) ->
         let x = sbox.value
         // compile each item in params and use compiled registers for function call
         //let reg_params = 
         Iconst(0)
       // App
-
+   -------------------------------------- *)
       | TypedDefine(stbox, TypedLambda(param, tyv, a)) ->
-        let (s, ty) = stbox.value
+        printfn "HEREHERE\n\n\n\n"
+        let (ty, s) = stbox.value
         let entry = this.symbol_table.get_entry(s).Value
         let funname = this.newid((sprintf "%s_%d" s (entry.gindex)))
-        let cdest = this.compile_expr(TypedLambda(param,tyv,a))
-        //func.add_inst(Call(
-        Iconst(0)
-*)
+        let args:Vec<LLVMtype*string> = Vec() // convert parameters to Vec<(LLVMtype*string)>
+        for i = 0 to param.Length - 1 do
+          match param.[i].value with
+            | Var(x) -> 
+              let entry = this.symbol_table.get_entry(x).Value
+              args.Add((translate_type(entry.typeof),x))
+            | TypedVar(ty,x) ->
+              let entry = this.symbol_table.get_entry(x).Value
+              args.Add((translate_type(entry.typeof),x))
+            | _ -> 
+              printfn "If you somehow got here, you are hopeless"
+
+        let new_func = this.program.add_new_func(funname, args, translate_type(ty))
+        let cdest = this.compile_expr(a.value,new_func)
+        let rty = translate_type(tyv)
+        match rty with 
+          | Void_t -> new_func.add_inst(Ret_noval)
+          | _ -> new_func.add_inst(Ret(rty, cdest))
+        cdest 
+ 
       // TypedDefine Lambdas
       | Define(sbox,a) -> // cannot be lambda 
         let x = sbox.value
@@ -714,6 +742,7 @@ type LLVMCompiler =
           }
           mainfunc.new_bb("beginmain") //|> ignore
     
+
           let mainres = this.compile_mainseq(mainseq, mainfunc)
           let ret:Instruction = Ret(Basic("i32"),Iconst(0))
           mainfunc.add_inst(ret)
@@ -756,5 +785,5 @@ let compile(trace) =
 
     | None -> printfn "CANNOT COMPILE ---- FAILED TO PARSE"
 
-compile(true)
-//compile(false)
+//compile(true)
+compile(false)
