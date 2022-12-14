@@ -254,6 +254,7 @@ G.production("Axpr --> ( Expr )",fun n -> n.[1].value)
 G.production("Program --> Axpr POpt", semactList)
 G.production("Expr --> LET ( Var Axpr ) Axpr",semactLet)
 // need to handle Typedval for TypedLambda; Typedval = lltype*expr = typeopt Axpr
+//G.production("Expr --> lambda ( SeqVar ) typeopt SeqExpr",semactLam)
 G.production("Expr --> lambda ( SeqVar ) typeopt Axpr",semactLam)
 
 // Bad Productions

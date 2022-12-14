@@ -4,6 +4,7 @@ open System.Collections.Generic;
 open Option;
 open MichaeLL;
 open MikeCheck;
+open Recless.Base;
 
 
 (* Abstract representation of Simplified LLVM IR:  (includes assignment)
@@ -283,7 +284,6 @@ type LLVMprogram =
   member this.to_string() = 
     let mutable code_gen = this.preamble 
     for fn in this.functions do
-
       let mutable def = sprintf "\ndefine %s @%s(" (tyToString(fn.return_type)) (fn.name) 
       let num_params = fn.formal_args.Count
 
@@ -571,34 +571,65 @@ type LLVMCompiler =
         
         Novalue
       // Whileloop
-(* --------------------------------------
       | App(xbox, seq) ->
-        let x = sbox.value
-        // compile each item in params and use compiled registers for function call
-        //let reg_params = 
-        Iconst(0)
+        let x = (xbox.value)
+        let entry = (this.symbol_table.get_entry(x).Value)
+        let mutable reg_params = []
+        for i in seq do
+          let r = this.newid("r")
+          let lb = new_stackitem<string>("Var", r,(xbox.line),(xbox.column))
+          let def_r = Define(lb, i.value)
+          this.symbol_table.infer_type(def_r,xbox.line) |> ignore
+          let v = this.compile_expr(def_r, func)
+          //let v = this.compile_expr(i.value, func)
+          reg_params <- (v)::reg_params
+        // function call
+        match entry.typeof with
+          LLfun(a, rty) -> 
+            let mutable ty_params = []
+            for j in a do
+              ty_params <- (Pointer(translate_type(j)))::ty_params
+            let mutable llvm_params = []
+            for j=0 to ty_params.Length-1 do
+              llvm_params <- (ty_params.[j],reg_params.[j])::llvm_params
+            let funname = sprintf "%s_%d" x (entry.gindex)
+            if translate_type(rty) = Void_t then 
+              let c = Call(None, translate_type(rty), [], funname, llvm_params)
+              func.add_inst(c)
+              Novalue
+            else
+              let ret = this.newid("return_var")
+              let c = Call(Some(ret), translate_type(rty), [], funname, llvm_params)
+              func.add_inst(c)
+              Register(ret)
+
+               
+         
       // App
-   -------------------------------------- *)
       | TypedDefine(stbox, TypedLambda(param, tyv, a)) ->
-        printfn "HEREHERE\n\n\n\n"
         let (ty, s) = stbox.value
         let entry = this.symbol_table.get_entry(s).Value
-        let funname = this.newid((sprintf "%s_%d" s (entry.gindex)))
+        //let funname = this.newid((sprintf "%s_%d" s (entry.gindex)))
+        let funname = sprintf "%s_%d" s (entry.gindex)
+        printfn "\n\n%s vs. %s vs. gindex: %d\n\n" s funname (entry.gindex)
         let args:Vec<LLVMtype*string> = Vec() // convert parameters to Vec<(LLVMtype*string)>
         for i = 0 to param.Length - 1 do
           match param.[i].value with
             | Var(x) -> 
               let entry = this.symbol_table.get_entry(x).Value
-              args.Add((translate_type(entry.typeof),x))
+              let v = sprintf "%s_%d" x (entry.gindex)
+              args.Add((Pointer(translate_type(entry.typeof)),v))
             | TypedVar(ty,x) ->
               let entry = this.symbol_table.get_entry(x).Value
-              args.Add((translate_type(entry.typeof),x))
+              let v = sprintf "%s_%d" x (entry.gindex)
+              args.Add((Pointer(translate_type(entry.typeof)),v))
             | _ -> 
               printfn "If you somehow got here, you are hopeless"
-
         let new_func = this.program.add_new_func(funname, args, translate_type(ty))
+        let bbName = this.newid("startfun")
+        new_func.new_bb(bbName)
         let cdest = this.compile_expr(a.value,new_func)
-        let rty = translate_type(tyv)
+        let rty = translate_type(ty)
         match rty with 
           | Void_t -> new_func.add_inst(Ret_noval)
           | _ -> new_func.add_inst(Ret(rty, cdest))
@@ -617,6 +648,7 @@ type LLVMCompiler =
         Register(new_x) 
       // Define
       | Var(s) ->  
+        
         let entry = this.symbol_table.get_entry(s).Value
         let new_x = sprintf "%s_%d" s (entry.gindex)
         let desttype = translate_type(entry.typeof)
@@ -656,42 +688,6 @@ type LLVMCompiler =
               printfn "Unsupported print type '%A'" t
               Novalue
               
-              
-(*
-          match a with 
-            | Var(x) -> 
-              let entry = this.symbol_table.get_entry(x).Value
-              let desttype = entry.typeof
-              let printtype = translate_type(desttype)
-              let mutable printfun = "lambda7c_print"
-              if printtype = Basic("i32") then
-                printfun <- printfun + "int"
-              else if printtype = Basic("double") then
-                printfun <- printfun + "float"
-              else if printtype = Basic("double") then 
-                printfun <- printfun + "str"
-              let cdest = this.compile_expr(Var(x),func)
-              func.add_inst(Call(None, Void_t,[], printfun, [(printtype, cdest)]))
-              Novalue
-            | Integer(i) ->
-              func.add_inst(Call(None, Void_t,[], "lambda7c_printint", [(Basic("i32"), Iconst(i))]))
-              Novalue
-            | Floatpt(f) ->
-              func.add_inst(Call(None, Void_t,[], "lambda7c_printfloat", [(Basic("double"), Fconst(f))]))
-              Novalue
-            | Strlit(s) ->
-              let str = this.newid(".str")
-              // @str1 = constant [16 x i8] c"gcd(16,6) = %d\0a\00", align 1
-              this.program.add_preamble(sprintf "@%s = constant [%d x i8] %s, align 1" str (s.Length - 1) (exToString(Sconst(s))))
-              let r = this.newid("r")
-              func.add_inst(Arrayindex(r, (s.Length-1), Basic("i8"), Global(str), Iconst(0)))
-              func.add_inst(Call(None, Void_t,[], "lambda7c_printstr", [(Pointer(Basic("i8")), Register(r))]))
-              Novalue
-              
-            | axpr -> 
-              let atype = this.symbol_table.infer_type(axpr,0)
-              Novalue
- *)
       | Sequence(a) -> 
         this.compile_seq(Sequence(a), func)
       | _ -> Iconst(0)
@@ -712,9 +708,11 @@ type LLVMCompiler =
     match seq with
       | Sequence(a) ->
         let mutable res = Novalue
+        //printfn "Main Sequence: %A" a
         for ex in a do
-          //printfn "Compilation Successful"
+          printfn "Compiling: %A" ex
           res <- this.compile_expr(ex.value, fn) 
+        printfn "Compilation Successful"
         this.program.functions.Add(fn)
         res
       | _ -> 
@@ -745,6 +743,7 @@ type LLVMCompiler =
 
           let mainres = this.compile_mainseq(mainseq, mainfunc)
           let ret:Instruction = Ret(Basic("i32"),Iconst(0))
+          
           mainfunc.add_inst(ret)
           
           this.program.to_string()
@@ -785,5 +784,5 @@ let compile(trace) =
 
     | None -> printfn "CANNOT COMPILE ---- FAILED TO PARSE"
 
-//compile(true)
-compile(false)
+compile(true)
+//compile(false)
