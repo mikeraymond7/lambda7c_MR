@@ -22,6 +22,11 @@ let rec grounded_type = function    // equiv. to match arg with ...
   | LLfun(args,rtype) ->  List.forall grounded_type (rtype::args)
   | _ -> true
 
+let rec get_grounded_type = function
+  | LList(t) -> get_grounded_type t
+  | LLfun(args,rtype) -> get_grounded_type rtype
+  | a -> a
+
 type table_entry =
   {
      mutable typeof: lltype;
@@ -100,7 +105,7 @@ type SymbolTable = // wrapping structure for symbol table frames
       | Strlit(_) -> LLstring
       // Binop does not allow interaction between int and float for simplicity
       | Binop("+",a,b) | Binop("-",a,b) | Binop("*",a,b) | Binop("/",a,b) | Binop("%",a,b) -> 
-        let (atype,btype) = (this.infer_type(a,line), this.infer_type(b,line))
+        let (atype,btype) = (get_grounded_type (this.infer_type(a,line)), get_grounded_type (this.infer_type(b,line)))
         if (atype=btype && (atype=LLint || atype=LLfloat)) || btype = LLunknown then 
           if atype=LLunknown then LLint
           else 
@@ -147,7 +152,7 @@ type SymbolTable = // wrapping structure for symbol table frames
           printfn "Line %d: 'display' found type 'LLuntypable'" line
           LLuntypable
       | Ifelse(s,a,b) ->
-        let (stype, atype, btype) = (this.infer_type(s,line),this.infer_type(a,line),this.infer_type(b,line))
+        let (stype, atype, btype) = (this.infer_type(s,line),get_grounded_type (this.infer_type(a,line)), get_grounded_type (this.infer_type(b,line)))
         if stype <> LLint then 
           printfn "Line %d: If condition expected boolean operation with type 'LLint' but found '%A'" line stype
           LLuntypable
@@ -243,7 +248,9 @@ type SymbolTable = // wrapping structure for symbol table frames
                     this.add_entry(s, LLfun(ptypes_rev,ty), Some(axpr.value))
                     this.push_frame(s, x.line, x.column)
 
-                    let atype = this.infer_type(axpr.value,axpr.line)
+                    let init_type = this.infer_type(axpr.value,axpr.line)
+                    let atype = get_grounded_type init_type
+                    
                     let ret = LLfun(ptypes_rev, atype)
                     if (isUntypable) then
                       LLuntypable

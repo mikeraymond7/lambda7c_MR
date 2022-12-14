@@ -1,1 +1,1 @@
-(define x:int (lambda (z:int y:int) (+ z y))) (define a (x 1 2)) (display a)
+(define x:int (lambda (z:int y:int) (+ z y))) (define a (x 1 2)) (display a) (display "\n")
