@@ -784,5 +784,5 @@ let compile(trace) =
 
     | None -> printfn "CANNOT COMPILE ---- FAILED TO PARSE"
 
-compile(true)
-//compile(false)
+//compile(true)
+compile(false)

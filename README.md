@@ -30,3 +30,4 @@ Note: To run with Tracing, enter llvmir.fs, go to bottom of file, and turn ``` c
 
 ## Needs Fix
 - Reading Multiline Functions (Reads one line from STDIN)
+- TypedDefine code generation for non-functions
