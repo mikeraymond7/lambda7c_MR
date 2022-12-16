@@ -22,6 +22,11 @@ let rec grounded_type = function    // equiv. to match arg with ...
   | LLfun(args,rtype) ->  List.forall grounded_type (rtype::args)
   | _ -> true
 
+let rec get_grounded_type = function
+  | LList(t) -> get_grounded_type t
+  | LLfun(args,rtype) -> get_grounded_type rtype
+  | a -> a
+
 type table_entry =
   {
      mutable typeof: lltype;
@@ -56,6 +61,10 @@ type SymbolTable = // wrapping structure for symbol table frames
   member this.add_entry(s:string,t:lltype,a:expr option) = //overwrite
     this.global_index <- this.global_index + 1
     this.current_frame.entries.Add(s,{typeof=t; gindex=this.global_index; ast_rep=a;})
+
+  member this.update_entry(s:string, t:lltype) = 
+    if isSome (this.get_entry(s)) then 
+      this.current_frame.entries.[s].typeof <- t
 
   member this.push_frame(n,line,column) =
     let newframe =
@@ -96,7 +105,7 @@ type SymbolTable = // wrapping structure for symbol table frames
       | Strlit(_) -> LLstring
       // Binop does not allow interaction between int and float for simplicity
       | Binop("+",a,b) | Binop("-",a,b) | Binop("*",a,b) | Binop("/",a,b) | Binop("%",a,b) -> 
-        let (atype,btype) = (this.infer_type(a,line), this.infer_type(b,line))
+        let (atype,btype) = (get_grounded_type (this.infer_type(a,line)), get_grounded_type (this.infer_type(b,line)))
         if (atype=btype && (atype=LLint || atype=LLfloat)) || btype = LLunknown then 
           if atype=LLunknown then LLint
           else 
@@ -143,7 +152,7 @@ type SymbolTable = // wrapping structure for symbol table frames
           printfn "Line %d: 'display' found type 'LLuntypable'" line
           LLuntypable
       | Ifelse(s,a,b) ->
-        let (stype, atype, btype) = (this.infer_type(s,line),this.infer_type(a,line),this.infer_type(b,line))
+        let (stype, atype, btype) = (this.infer_type(s,line),get_grounded_type (this.infer_type(a,line)), get_grounded_type (this.infer_type(b,line)))
         if stype <> LLint then 
           printfn "Line %d: If condition expected boolean operation with type 'LLint' but found '%A'" line stype
           LLuntypable
@@ -213,11 +222,9 @@ type SymbolTable = // wrapping structure for symbol table frames
                 LLuntypable
               | None -> 
                 match a with 
-                  | TypedLambda(param, ty, axpr) -> // NOT DONE
+                  | TypedLambda(param, ty, axpr) ->
                     // x:LBox<expr> list
                     let mutable ptypes = []
-                    this.add_entry(s, ty, Some(axpr.value))
-                    this.push_frame(s, x.line, x.column)
                     let mutable isUntypable = false
                     for i in param do
                       match i.value with
@@ -233,12 +240,17 @@ type SymbolTable = // wrapping structure for symbol table frames
                           printfn "Line %d: Expected typed variable in lambda parameters but found '%A'" (i.line) (i.value) // should never happen based on grammar
                           isUntypable <- true
                           ptypes <- LLuntypable::ptypes
-                    
         
                     let mutable ptypes_rev = []
                     for i in ptypes do
                       ptypes_rev <- i::ptypes_rev
-                    let atype = this.infer_type(axpr.value,axpr.line)
+
+                    this.add_entry(s, LLfun(ptypes_rev,ty), Some(axpr.value))
+                    this.push_frame(s, x.line, x.column)
+
+                    let init_type = this.infer_type(axpr.value,axpr.line)
+                    let atype = get_grounded_type init_type
+                    
                     let ret = LLfun(ptypes_rev, atype)
                     if (isUntypable) then
                       LLuntypable
@@ -246,6 +258,7 @@ type SymbolTable = // wrapping structure for symbol table frames
                       if (atype = tyv || atype = LLunknown || atype = LList(LLunknown)) then 
                         this.add_entry(s, ret, Some(axpr.value))
                         this.pop_frame() |> ignore
+                        this.update_entry(s, ret)
                         ret
                       else
                         printfn "Line %d: 'TypedDefine' type '%A' does not match expression with type '%A'" (x.line) tyv atype
@@ -265,7 +278,7 @@ type SymbolTable = // wrapping structure for symbol table frames
       | TypedLet(v,a,axpr) -> 
         match v.value with
           | (ty, s) -> 
-            match this.get_entry(s) with
+            match this.in_scope(s) with
               | Some(a) -> 
                 printfn "Line %d, Column %d: '%s' has already been defined" (v.line) (v.column) s
                 LLuntypable
@@ -274,9 +287,8 @@ type SymbolTable = // wrapping structure for symbol table frames
                 let axtype = this.infer_type(axpr.value, axpr.line)
                 axtype
       | TypedLambda(param, ty, axpr) -> 
-        let axtype = this.infer_type(axpr.value, line) 
         let mutable ptypes = []
-        this.push_frame("tempLam",axpr.line,axpr.column)
+        // this.push_frame("tempLam",axpr.line,axpr.column)
         for i in param do
           match i.value with
             | Var(s) -> 
@@ -290,7 +302,13 @@ type SymbolTable = // wrapping structure for symbol table frames
         let mutable ptypes_rev = []
         for i in ptypes do
           ptypes_rev <- i::ptypes_rev
-        let ret = LLfun(ptypes_rev, this.infer_type(axpr.value,axpr.line))
+
+        this.add_entry((sprintf "tempLam%d%d" (axpr.line) (axpr.column)) , LLfun(ptypes_rev,ty), Some(axpr.value))
+        this.push_frame("tempLam",axpr.line,axpr.column)
+
+        let axtype = this.infer_type(axpr.value, line) 
+        let ret = LLfun(ptypes_rev, axtype)
+        this.add_entry((sprintf "tempLam%d%d" (axpr.line) (axpr.column)) , ret, Some(axpr.value))
 
         if (ty = LLunknown || axtype = ty) && axtype <> LLuntypable then  
           this.pop_frame() |> ignore
@@ -310,7 +328,23 @@ type SymbolTable = // wrapping structure for symbol table frames
         let atype = this.infer_type(a.value, a.line)
         if atype <> LLuntypable then LList(atype)
         else LLuntypable
-
+      | App(xBox, seq) -> 
+        let funType = this.infer_type(Var(xBox.value),xBox.line)
+        // LLfun (parameters) * return type
+        match funType with 
+          | LLfun(ptypes, rTy) ->
+            let mutable retType = rTy
+            for i = 0 to ptypes.Length - 1 do
+              let pty = ptypes.[i]
+              let sty = this.infer_type(seq.[i].value, seq.[i].line)
+              if pty <> sty then
+                printfn "Line %d: function '%s' parameter '%d' for function type '%A' does not match function application type '%A'" line (xBox.value) i pty sty
+                retType <- LLuntypable
+            retType
+          | _ -> 
+            printfn "Line %d: Cannot apply to a non-lambda variable, '%s'" line (xBox.value)
+            LLuntypable
+        
 
       // Vectors
 
