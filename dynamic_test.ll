@@ -1,3 +1,5 @@
+(define x:int 5) (define add:int (lambda (a:int) (+ a x))) (define res (add 5)) (display res)
+
 (define x:int (lambda (z:int y:int) (display y) (display "\n") (if (< z 1) y (x (- z 1) (+ y 1))))) (x 5 6)
 
 

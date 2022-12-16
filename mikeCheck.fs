@@ -44,41 +44,55 @@ type TableEntry =
   | SimpleDef of typeof:lltype * gindex:int * ast_rep:option<expr>
   | LambdaDef of typeof:lltype *gindex:int * frame:table_frame * ast_rep:option<expr>
 
-// let check_lambda
-(*let check_def(lb:LBox, axpr:expr) = 
-  match lb.value with 
-    | (TypeExpr(a),Alphanum(s)) -> a
-    | (Alphanum(s)) -> LLunknown
-    | _ -> LLuntypable
-*)
-
 type SymbolTable = // wrapping structure for symbol table frames
   { 
     mutable current_frame: table_frame;
     mutable global_index: int;
-    frame_hash:HashMap<(int*int),table_frame>;
+    frame_hash:HashMap<int,table_frame>;
+    //frame_hash:HashMap<(int*int),table_frame>;
   }
   member this.add_entry(s:string,t:lltype,a:expr option) = //overwrite
     this.global_index <- this.global_index + 1
     this.current_frame.entries.Add(s,{typeof=t; gindex=this.global_index; ast_rep=a;})
+    this.global_index
 
   member this.update_entry(s:string, t:lltype) = 
     if isSome (this.get_entry(s)) then 
       this.current_frame.entries.[s].typeof <- t
 
-  member this.push_frame(n,line,column) =
+  //member this.push_frame(n,line,column) =
+  member this.push_frame(n,uid) =
     let newframe =
       {
         table_frame.name=n;
         entries=HashMap<string,table_entry>();
         parent_scope = Some(this.current_frame);
       }
-    this.frame_hash.[(line,column)] <- newframe
+    //this.frame_hash.[(line,column)] <- newframe
+    this.frame_hash.[uid] <- newframe
     this.current_frame <- newframe
 
   member this.pop_frame() = 
     this.current_frame.parent_scope |> map (fun p -> this.current_frame<-p)
 
+  member this.collect_freevars(uid: int) =        
+    let mutable freevars = Vec()                                    
+    //let mutable freevars = HashMap()
+    let original_frame = this.frame_hash.[uid] // guaranteed to exist in hash
+    let mutable parent_frame = original_frame.parent_scope
+    if isSome parent_frame then
+      for kvp in parent_frame.Value.entries do
+        let (name, entry) = kvp.Key, kvp.Value
+        match entry.typeof,entry.gindex with
+          | LLfun(_,_),_ -> printfn ""
+          //| _,_ -> freevars.[name] <- entry
+          | _ -> freevars.Add(name, entry)
+      for kvp in original_frame.entries do
+        let name = kvp.Key 
+        let entry = kvp.Value
+        //freevars.[name] = entry
+        freevars.Add(name, entry)
+    freevars
 
   member this.get_entry(var) =
     // follow parent pointer until find some or none
@@ -209,7 +223,7 @@ type SymbolTable = // wrapping structure for symbol table frames
               printfn "Line %d, Column %d: Type of '%s' is '%A'" (x.line) (x.column) (s) atype
               LLuntypable
             else 
-              this.add_entry(s, atype, Some(a))
+              this.add_entry(s, atype, Some(a)) |> ignore
               LLvar(s)
             
       | TypedDefine(x,a) ->
@@ -234,7 +248,7 @@ type SymbolTable = // wrapping structure for symbol table frames
                             isUntypable <- true
                             ptypes <- LLuntypable::ptypes
                           else 
-                            this.add_entry(s, ty, None)
+                            this.add_entry(s, ty, None) |> ignore
                             ptypes <- ty::ptypes
                         | _ -> 
                           printfn "Line %d: Expected typed variable in lambda parameters but found '%A'" (i.line) (i.value) // should never happen based on grammar
@@ -245,8 +259,8 @@ type SymbolTable = // wrapping structure for symbol table frames
                     for i in ptypes do
                       ptypes_rev <- i::ptypes_rev
 
-                    this.add_entry(s, LLfun(ptypes_rev,ty), Some(axpr.value))
-                    this.push_frame(s, x.line, x.column)
+                    let fIdx = this.add_entry(s, LLfun(ptypes_rev,ty), Some(axpr.value))
+                    this.push_frame(s, fIdx)
 
                     let init_type = this.infer_type(axpr.value,axpr.line)
                     let atype = get_grounded_type init_type
@@ -256,7 +270,8 @@ type SymbolTable = // wrapping structure for symbol table frames
                       LLuntypable
                     elif (ty = atype || ty =  LLunknown) && atype <> LLuntypable then
                       if (atype = tyv || atype = LLunknown || atype = LList(LLunknown)) then 
-                        this.add_entry(s, ret, Some(axpr.value))
+                        //let new_fIdx = this.add_entry(s, ret, Some(axpr.value))
+                        //this.push_frame(s, new_fIdx)
                         this.pop_frame() |> ignore
                         this.update_entry(s, ret)
                         ret
@@ -270,7 +285,7 @@ type SymbolTable = // wrapping structure for symbol table frames
                   | _ -> 
                     let atype = this.infer_type(a,x.line)
                     if atype <> LLuntypable && (atype = tyv || atype = LLunknown) then
-                      this.add_entry(s, tyv, Some(a))
+                      this.add_entry(s, tyv, Some(a)) |> ignore
                       LLvar(s)
                     else
                       printfn "Line %d: Expression 'define' of '%s' expected type '%A' but found type '%A'" line s tyv atype
@@ -283,7 +298,7 @@ type SymbolTable = // wrapping structure for symbol table frames
                 printfn "Line %d, Column %d: '%s' has already been defined" (v.line) (v.column) s
                 LLuntypable
               | None -> 
-                this.add_entry(s,ty,Some(a))
+                this.add_entry(s,ty,Some(a)) |> ignore // for now
                 let axtype = this.infer_type(axpr.value, axpr.line)
                 axtype
       | TypedLambda(param, ty, axpr) -> 
@@ -292,10 +307,10 @@ type SymbolTable = // wrapping structure for symbol table frames
         for i in param do
           match i.value with
             | Var(s) -> 
-              this.add_entry(s, LLunknown, None)
+              this.add_entry(s, LLunknown, None) |> ignore
               ptypes <- LLunknown::ptypes
             | TypedVar(ty,s) -> 
-              this.add_entry(s, ty, None)
+              this.add_entry(s, ty, None) |> ignore
               ptypes <- ty::ptypes
             | _ -> 
               printfn "Line %d: Expexted 'Var' or 'TypedVar' in lambda parameters but found '%A'" (i.line) (i.value)
@@ -303,12 +318,12 @@ type SymbolTable = // wrapping structure for symbol table frames
         for i in ptypes do
           ptypes_rev <- i::ptypes_rev
 
-        this.add_entry((sprintf "tempLam%d%d" (axpr.line) (axpr.column)) , LLfun(ptypes_rev,ty), Some(axpr.value))
-        this.push_frame("tempLam",axpr.line,axpr.column)
+        let fIdx = this.add_entry((sprintf "tempLam%d%d" (axpr.line) (axpr.column)) , LLfun(ptypes_rev,ty), Some(axpr.value))
+        this.push_frame("tempLam",fIdx)
 
         let axtype = this.infer_type(axpr.value, line) 
         let ret = LLfun(ptypes_rev, axtype)
-        this.add_entry((sprintf "tempLam%d%d" (axpr.line) (axpr.column)) , ret, Some(axpr.value))
+        this.add_entry((sprintf "tempLam%d%d" (axpr.line) (axpr.column)) , ret, Some(axpr.value)) |> ignore // for now
 
         if (ty = LLunknown || axtype = ty) && axtype <> LLuntypable then  
           this.pop_frame() |> ignore

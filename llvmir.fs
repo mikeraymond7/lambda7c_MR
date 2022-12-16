@@ -576,32 +576,64 @@ type LLVMCompiler =
         let entry = (this.symbol_table.get_entry(x).Value)
         let mutable reg_params = []
         for i in seq do
-          let r = this.newid("r")
+          (*let r = this.newid("r")
           let lb = new_stackitem<string>("Var", r,(xbox.line),(xbox.column))
           let def_r = Define(lb, i.value)
           this.symbol_table.infer_type(def_r,xbox.line) |> ignore
-          let v = this.compile_expr(def_r, func)
-          //let v = this.compile_expr(i.value, func)
+          let v = this.compile_expr(def_r, func)*)
+          let v = this.compile_expr(i.value, func)
           reg_params <- (v)::reg_params
         // function call
         match entry.typeof with
-          LLfun(a, rty) -> 
-            let mutable ty_params = []
-            for j in a do
-              ty_params <- (Pointer(translate_type(j)))::ty_params
-            let mutable llvm_params = []
+          | LLfun(a, rty) -> 
+            let mutable ty_params = Array.zeroCreate (a.Length)
+            //for j in a do
+            for j = 0 to a.Length do
+              //ty_params <- (translate_type(j))::ty_params
+              ty_params.[j] = translate_type(a.[j])
+            
+            let freevars = this.symbol_table.collect_freevars(entry.gindex)
+            let mutable llvm_params = Array.zeroCreate (ty_params.Length + freevars.Count)
+
             for j=0 to ty_params.Length-1 do
-              llvm_params <- (ty_params.[j],reg_params.[j])::llvm_params
+              llvm_params.[j] = (ty_params.[j],reg_params.[j])
+              //llvm_params <- (ty_params.[j],reg_params.[j])::llvm_params
+
+            // calculate freevars
+            // add free vars and remove duplicates
+            
+            //for (name,fentry) in freevars do
+            for i = 0 to freevars.Count-1 do
+              let (name, fentry) = freevars.[i]
+              let free_name = (sprintf "%s_%d" name (fentry.gindex))
+              let mutable add = true
+              for ar in llvm_params do
+                let (ty, nme) = ar
+                if (free_name).Equals(nme) then
+                  add <- false
+              if add then 
+                let free_type = translate_type(fentry.typeof)
+                llvm_params.[i+ty_params.Length] = (free_type,Register(free_name)) |> ignore
+
+// QUICK FIX
+            let mutable cnslst = []
+            for item in llvm_params do 
+              cnslst <- item::cnslst
+            let mutable cnslst_rev = []
+            for item in llvm_params do 
+              cnslst_rev <- item::cnslst_rev
+
             let funname = sprintf "%s_%d" x (entry.gindex)
             if translate_type(rty) = Void_t then 
-              let c = Call(None, translate_type(rty), [], funname, llvm_params)
+              let c = Call(None, translate_type(rty), [], funname, cnslst_rev)
               func.add_inst(c)
               Novalue
             else
               let ret = this.newid("return_var")
-              let c = Call(Some(ret), translate_type(rty), [], funname, llvm_params)
+              let c = Call(Some(ret), translate_type(rty), [], funname, cnslst_rev)
               func.add_inst(c)
               Register(ret)
+          | _ -> Iconst(0) // should fail in typechecking if not lambda
 
                
          
@@ -611,20 +643,40 @@ type LLVMCompiler =
         let entry = this.symbol_table.get_entry(s).Value
         //let funname = this.newid((sprintf "%s_%d" s (entry.gindex)))
         let funname = sprintf "%s_%d" s (entry.gindex)
-        printfn "\n\n%s vs. %s vs. gindex: %d\n\n" s funname (entry.gindex)
-        let args:Vec<LLVMtype*string> = Vec() // convert parameters to Vec<(LLVMtype*string)>
+
+        let mutable args:Vec<LLVMtype*string> = Vec() // convert parameters to Vec<(LLVMtype*string)>
+        let freevars = this.symbol_table.collect_freevars(entry.gindex)
+
         for i = 0 to param.Length - 1 do
           match param.[i].value with
             | Var(x) -> 
               let entry = this.symbol_table.get_entry(x).Value
               let v = sprintf "%s_%d" x (entry.gindex)
-              args.Add((Pointer(translate_type(entry.typeof)),v))
+              //args.Add(Pointer(translate_type(entry.typeof)),v))
+              args.Add((translate_type(entry.typeof),v))
             | TypedVar(ty,x) ->
               let entry = this.symbol_table.get_entry(x).Value
               let v = sprintf "%s_%d" x (entry.gindex)
-              args.Add((Pointer(translate_type(entry.typeof)),v))
+              //args.Add((Pointer(translate_type(entry.typeof)),v))
+              args.Add((translate_type(entry.typeof),v))
             | _ -> 
               printfn "If you somehow got here, you are hopeless"
+        
+        // add free vars and remove duplicates
+        for (name,fentry) in freevars do
+        //for kvp in freevars do
+          //let name = kvp.Key
+          //let fentry = kvp.Value
+          let free_name = (sprintf "%s_%d" name (fentry.gindex))
+          let mutable add = true
+          for ar in args do
+            let (ty, nme) = ar
+            if (free_name).Equals(nme) then
+              add <- false
+          if add then 
+            let free_type = translate_type(fentry.typeof)
+            args.Add((free_type, free_name))
+
         let new_func = this.program.add_new_func(funname, args, translate_type(ty))
         let bbName = this.newid("startfun")
         new_func.new_bb(bbName)
@@ -636,6 +688,16 @@ type LLVMCompiler =
         cdest 
  
       // TypedDefine Lambdas
+      | TypedDefine(stbox, axpr) ->
+        let (ty, x) = stbox.value
+        let cdest = this.compile_expr(axpr, func)
+        let entry = this.symbol_table.get_entry(x).Value
+        let desttype = translate_type(ty)
+        let new_x = sprintf "%s_%d" x (entry.gindex) // will crash if user declares "r"
+        func.add_inst(Alloca(new_x,desttype,None))
+        func.add_inst(Store(desttype,cdest,Register(new_x),None))
+        Register(new_x)
+      // TypedDefine (Non-lambda)
       | Define(sbox,a) -> // cannot be lambda 
         let x = sbox.value
         let cdest = this.compile_expr(a, func)
@@ -648,7 +710,6 @@ type LLVMCompiler =
         Register(new_x) 
       // Define
       | Var(s) ->  
-        
         let entry = this.symbol_table.get_entry(s).Value
         let new_x = sprintf "%s_%d" s (entry.gindex)
         let desttype = translate_type(entry.typeof)
@@ -720,6 +781,7 @@ type LLVMCompiler =
         Novalue
 
   member this.compile_program(mainseq:expr) = 
+    //this.symbol_table.find_all_closures()
     match mainseq with 
       | Sequence(a) ->
         let ptype = this.symbol_table.infer_type(mainseq,0)
@@ -768,7 +830,8 @@ let compile(trace) =
             parent_scope = None
           }
           global_index = 0
-          frame_hash = HashMap<(int*int),table_frame>()
+          frame_hash = HashMap<int,table_frame>()
+          //frame_hash = HashMap<(int*int),table_frame>()
         } 
         program = {
           preamble = ""
