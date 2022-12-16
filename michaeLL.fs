@@ -30,7 +30,7 @@ type expr =
   | VGet of LBox<string>*int
   | VMake of LBox<int*int>
   | Sequence of LBox<expr> list
-  //| Beginseq of LBox<expr> list
+  | App of LBox<string>*(LBox<expr> list)
   | TypeExpr of lltype
   | Typedval of (lltype*expr)
   | Label of string
@@ -85,7 +85,7 @@ let semactWhl(rhs:Vec<Stackitem<expr>>) =
   match (rhs.[2].value, rhs.[5].value) with
     | (Binop(s,a,b),Sequence(c)) -> Whileloop(Binop(s,a,b), Sequence(c))
     | _ -> 
-      printfn "You imbecile! While loops require a binary operation followed by a sequence of expressions!"
+      printfn "While loops require a binary operation followed by a sequence of expressions!"
       Error
 
 // Expr --> DEF Var Axpr
@@ -131,10 +131,19 @@ let semactNil(rhs:Vec<Stackitem<expr>>) = // VarOpt -->
   Sequence([])
 
 // SeqExpr --> Axpr SeqOpt
+// App
 let semactList(rhs:Vec<Stackitem<expr>>) = 
   match (rhs.[0], rhs.[1].value) with
     | (a,Sequence(b)) -> Sequence(a::b)
     | _ -> Error
+
+// Expr --> var SeqExpr
+let semactApp(rhs:Vec<Stackitem<expr>>) =
+  match (rhs.[0].value, rhs.[1].value) with
+    | (Var(x), Sequence(b)) -> App(rhs.[0].tolbox(x), b)
+    | _ -> 
+      printfn "Line %d, Column %d: Parsing expected Function Application for variable and parameters but found '%A'" (rhs.[0].line) (rhs.[0].column) rhs
+      Error
 
 // SeqVar --> Var VarOpt 
 let semactParam(rhs:Vec<Stackitem<expr>>) = 
@@ -235,16 +244,18 @@ G.production("Expr --> BeginSeq",fun n -> n.[0].value)
 G.production("Expr --> vec_setq Var integer Axpr", semactVSetQ)
 G.production("Expr --> vec_get Var integer", semactVGet)
 G.production("Expr --> vec_make integer integer", semactMake)
+G.production("Expr --> var SeqExpr", semactApp) // function application
 // declare log2 = int lambda n:int;
 // declare Var txpr lambda (SeqVar)
 
 /// new productions added by Liang
 G.production("Axpr --> ( Expr )",fun n -> n.[1].value)
-G.production("Expr --> SeqExpr", fun n -> n.[0].value)
+//G.production("Expr --> SeqExpr", fun n -> n.[0].value)
 G.production("Program --> Axpr POpt", semactList)
 G.production("Expr --> LET ( Var Axpr ) Axpr",semactLet)
 // need to handle Typedval for TypedLambda; Typedval = lltype*expr = typeopt Axpr
-G.production("Expr --> lambda ( SeqVar ) typeopt Axpr",semactLam)
+G.production("Expr --> lambda ( SeqVar ) typeopt SeqExpr",semactLam)
+//G.production("Expr --> lambda ( SeqVar ) typeopt Axpr",semactLam)
 
 // Bad Productions
 //G.production("Program --> P POpt", semactList)
@@ -273,6 +284,7 @@ G.production("Txpr --> string", fun n -> TypeExpr(LLstring))
 G.production("SeqVar --> Var VarOpt", semactParam)
 G.production("VarOpt --> SeqVar", fun n -> n.[0].value)
 G.production("VarOpt -->",semactNil) // Return Sequence([])
+
 
 // Expression Sequences
 //As --> Axpr Asopt
