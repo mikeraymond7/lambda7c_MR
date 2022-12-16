@@ -20,10 +20,13 @@ OR
   
 Note: To run with Tracing, enter llvmir.fs, go to bottom of file, and turn ``` compile(false)``` --> ``` compile(true)```
 
+## Current Higher Level Abilities:
+- Recursive Functions
+
 ## Currently Unimplemented:
 - Vectors (Still not parsing properly)
 - Comments 
-- Functions (Type check, do not generate code)
+- Calculation of Closure
 
 ## Needs Fix
 - Reading Multiline Functions (Reads one line from STDIN)
