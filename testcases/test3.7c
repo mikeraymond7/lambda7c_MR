@@ -1,3 +1,18 @@
+// nested loop (multiplication table)
+define x = 1;
+define y = 0;
+while (x<10) {
+  y = 1;
+  while (y<10) {
+    print(x*y);
+    if (x*y<10) then print("   ") else print("  ");
+    y = y+1;
+  }//while y
+  print("\n");
+  x = x+1;
+}//while x
+
+/*
 (define x 1)
 (define y 0)
 (while (< x 10) (begin
@@ -10,6 +25,7 @@
    (display "\n")
    (setq x (+ x 1))
 ))
+*/
 
 /* output:
 

@@ -583,25 +583,30 @@ type LLVMCompiler =
           let v = this.compile_expr(def_r, func)*)
           let v = this.compile_expr(i.value, func)
           reg_params <- (v)::reg_params
+
         // function call
         match entry.typeof with
           | LLfun(a, rty) -> 
-            let mutable ty_params = Array.zeroCreate (a.Length)
-            //for j in a do
-            for j = 0 to a.Length do
-              //ty_params <- (translate_type(j))::ty_params
-              ty_params.[j] = translate_type(a.[j])
+            // derive types from function type to match with arguments
+            let mutable ty_params = Vec()
+            printfn "Registers: %A" reg_params
+            printfn "Building ty_params"
+            for j = 0 to a.Length-1 do
+              printfn "ty_params: %A" ty_params
+              ty_params.Add(translate_type(a.[j]))
             
-            let freevars = this.symbol_table.collect_freevars(entry.gindex)
-            let mutable llvm_params = Array.zeroCreate (ty_params.Length + freevars.Count)
+            let mutable llvm_params = Vec()
 
-            for j=0 to ty_params.Length-1 do
-              llvm_params.[j] = (ty_params.[j],reg_params.[j])
-              //llvm_params <- (ty_params.[j],reg_params.[j])::llvm_params
+            printfn "Building llvm_params"
+            for j=0 to ty_params.Count - 1 do
+              llvm_params.Add((ty_params.[j],reg_params.[j]))
 
             // calculate freevars
             // add free vars and remove duplicates
+            printfn "Building freevars"
+            let freevars = this.symbol_table.collect_freevars(entry.gindex)
             
+            printfn "Building llvm_params pt 2"
             //for (name,fentry) in freevars do
             for i = 0 to freevars.Count-1 do
               let (name, fentry) = freevars.[i]
@@ -613,14 +618,14 @@ type LLVMCompiler =
                   add <- false
               if add then 
                 let free_type = translate_type(fentry.typeof)
-                llvm_params.[i+ty_params.Length] = (free_type,Register(free_name)) |> ignore
+                llvm_params.Add((free_type,Register(free_name)))
 
 // QUICK FIX
             let mutable cnslst = []
             for item in llvm_params do 
               cnslst <- item::cnslst
             let mutable cnslst_rev = []
-            for item in llvm_params do 
+            for item in cnslst do 
               cnslst_rev <- item::cnslst_rev
 
             let funname = sprintf "%s_%d" x (entry.gindex)
@@ -633,7 +638,8 @@ type LLVMCompiler =
               let c = Call(Some(ret), translate_type(rty), [], funname, cnslst_rev)
               func.add_inst(c)
               Register(ret)
-          | _ -> Iconst(0) // should fail in typechecking if not lambda
+          | _ -> 
+            Iconst(0) // should fail in typechecking if not lambda
 
                
          
@@ -652,12 +658,10 @@ type LLVMCompiler =
             | Var(x) -> 
               let entry = this.symbol_table.get_entry(x).Value
               let v = sprintf "%s_%d" x (entry.gindex)
-              //args.Add(Pointer(translate_type(entry.typeof)),v))
               args.Add((translate_type(entry.typeof),v))
             | TypedVar(ty,x) ->
               let entry = this.symbol_table.get_entry(x).Value
               let v = sprintf "%s_%d" x (entry.gindex)
-              //args.Add((Pointer(translate_type(entry.typeof)),v))
               args.Add((translate_type(entry.typeof),v))
             | _ -> 
               printfn "If you somehow got here, you are hopeless"

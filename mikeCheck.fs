@@ -77,7 +77,6 @@ type SymbolTable = // wrapping structure for symbol table frames
 
   member this.collect_freevars(uid: int) =        
     let mutable freevars = Vec()                                    
-    //let mutable freevars = HashMap()
     let original_frame = this.frame_hash.[uid] // guaranteed to exist in hash
     let mutable parent_frame = original_frame.parent_scope
     if isSome parent_frame then
@@ -85,7 +84,6 @@ type SymbolTable = // wrapping structure for symbol table frames
         let (name, entry) = kvp.Key, kvp.Value
         match entry.typeof,entry.gindex with
           | LLfun(_,_),_ -> printfn ""
-          //| _,_ -> freevars.[name] <- entry
           | _ -> freevars.Add(name, entry)
       for kvp in original_frame.entries do
         let name = kvp.Key 
